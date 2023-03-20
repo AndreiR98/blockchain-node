@@ -2,15 +2,16 @@ package uk.co.roteala.glaciernode.node;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.checkerframework.checker.units.qual.A;
+import org.rocksdb.RocksDBException;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
 import org.springframework.stereotype.Component;
-import org.springframework.util.SerializationUtils;
-import reactor.core.publisher.Flux;
 import reactor.netty.Connection;
-import uk.co.roteala.common.TransactionBaseModel;
 import uk.co.roteala.glaciernode.client.PeerCreatorFactory;
-import uk.co.roteala.glaciernode.services.PeerServices;
+import uk.co.roteala.glaciernode.client.Seeder;
+import uk.co.roteala.glaciernode.server.Server;
+import uk.co.roteala.glaciernode.services.ConnectionServices;
 
 import java.util.List;
 
@@ -19,34 +20,30 @@ import java.util.List;
 @RequiredArgsConstructor
 public class Node {
 
-    @Autowired
     private PeerCreatorFactory creatorFactory;
 
-    private final PeerServices services;
+//    @Autowired
+//    private Seeder seeder;
+    private List<Connection> connnections;
 
-//    @Bean
-//    public void startNode(){
-//        final TransactionBaseModel tx = new TransactionBaseModel();
-//
-//        tx.setTo("test");
-//        tx.setTransactionIndex(1);
-//        tx.setBlockHash("asdasdasda");
-//
-//        List<Connection> connections = creatorFactory.connections();
-//
-//        log.info("Connections:{}", connections);
-//
-//        connections.forEach(connection -> {
-//            log.info("Sending payload!");
-//            services.sendPayload(connection.bind(), SerializationUtils.serialize(tx));
-//
-//            Flux<byte[]> message = services.getPayload(connection.bind());
-//            message.doOnNext(t -> {
-//                final TransactionBaseModel txd = (TransactionBaseModel) SerializationUtils.deserialize(t);
-//                log.info("Test:{}",txd);
-//            });
-//        });
-//
-//        //creatorFactory.connections().forEach(connection -> services.sendPayload(connection, SerializationUtils.serialize(tx)));
-//    }
+    /**
+     * Start the seeder and all the connections between nodes
+     * */
+    @Bean
+    public void startNode() throws InterruptedException, RocksDBException {
+        Server server = new Server();
+
+        server.initServer();
+
+
+        Seeder seeder = new Seeder();
+        seeder.seederConnection();
+
+        Thread.sleep(1000);
+
+        creatorFactory.peersConnection();
+
+        this.connnections = creatorFactory.getP2P();
+
+    }
 }

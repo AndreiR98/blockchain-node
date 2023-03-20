@@ -3,14 +3,17 @@ package uk.co.roteala.glaciernode.storage;
 import lombok.extern.slf4j.Slf4j;
 import org.rocksdb.RocksDBException;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Configuration;
 import org.springframework.stereotype.Service;
 import uk.co.roteala.storage.StorageComponent;
 import uk.co.roteala.storage.StorageType;
+import uk.co.roteala.storage.StoragesCreatorComponent;
 
 @Slf4j
 @Service
+@Configuration
 @SuppressWarnings({"rawtypes", "unchecked"})
-public class StorageCreatorComponent implements uk.co.roteala.storage.StorageCreatorComponent {
+public class StorageCreatorComponent implements StoragesCreatorComponent {
 
     private StorageCreatorComponentFactory storageCreatorComponent;
 

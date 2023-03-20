@@ -83,7 +83,7 @@ public class StorageCreatorComponentFactory{
             return RocksDB.open(options, path);
         }catch (Exception e) {
             log.error("Unable to open sotrage at:");
-            throw new RocksDBException("");
+            throw new RocksDBException(e.getMessage());
         }
     }
 
@@ -109,7 +109,7 @@ public class StorageCreatorComponentFactory{
             return RocksDB.open(options, path);
         }catch (Exception e) {
             log.error("Unable to open sotrage at:");
-            throw new RocksDBException("");
+            throw new RocksDBException(e.getMessage());
         }
     }
 
@@ -135,7 +135,7 @@ public class StorageCreatorComponentFactory{
             return RocksDB.open(options, path);
         }catch (Exception e) {
             log.error("Unable to open sotrage at:");
-            throw new RocksDBException("");
+            throw new RocksDBException(e.getMessage());
         }
     }
 
@@ -161,7 +161,7 @@ public class StorageCreatorComponentFactory{
             return RocksDB.open(options, path);
         }catch (Exception e) {
             log.error("Unable to open sotrage at:");
-            throw new RocksDBException("");
+            throw new RocksDBException(e.getMessage());
         }
     }
 
@@ -187,7 +187,7 @@ public class StorageCreatorComponentFactory{
             return RocksDB.open(options, path);
         }catch (Exception e) {
             log.error("Unable to open sotrage at:");
-            throw new RocksDBException("");
+            throw new RocksDBException(e.getMessage());
         }
     }
 }

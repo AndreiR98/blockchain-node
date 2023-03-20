@@ -1,62 +1,70 @@
 package uk.co.roteala.glaciernode.client;
 
+import io.netty.channel.ChannelOption;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.reactivestreams.Publisher;
+import org.rocksdb.RocksDBException;
+import org.rocksdb.RocksIterator;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.util.SerializationUtils;
-import reactor.core.Disposable;
-import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.netty.Connection;
-import reactor.netty.NettyInbound;
-import reactor.netty.NettyOutbound;
 import reactor.netty.tcp.TcpClient;
-import reactor.netty.tcp.TcpClientConfig;
-import uk.co.roteala.common.TransactionBaseModel;
+import uk.co.roteala.common.BaseEmptyModel;
+import uk.co.roteala.common.events.EventsMessageFactory;
+import uk.co.roteala.glaciernode.services.ConnectionServices;
 import uk.co.roteala.glaciernode.storage.StorageCreatorComponent;
-import uk.co.roteala.storage.StorageComponent;
+import uk.co.roteala.net.Peer;
 
+import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.Iterator;
 import java.util.List;
-import java.util.function.Consumer;
-import java.util.function.Function;
 
 /**
  * Creates each connection for each peer
  * */
 @Slf4j
 @Configuration
+@RequiredArgsConstructor
 public class PeerCreatorFactory {
 
+    @Autowired
     private StorageCreatorComponent storages;
 
-    @Bean
-    public List<Connection> connections() {
-        List<Connection> connections = new ArrayList<>();
+    private List<Connection> connection;
 
-        //For now only connects with server
-        Connection connection = TcpClient.create()
-                .host("localhost")
-                .port(7331)
-//                .handle((in, out) -> {
-////                    Flux<byte[]> v = in.receive().asByteArray();
-////                    v.doOnNext(t -> log.info("Data:{}", SerializationUtils.deserialize(t))).subscribe();
-//                    final TransactionBaseModel tx = new TransactionBaseModel();
-//
-//                    tx.setTo("test");
-//                    tx.setTransactionIndex(1);
-//                    tx.setBlockHash("asdasdasda");
-//
-//                    return out.sendByteArray(Flux.just(SerializationUtils.serialize(tx))).neverComplete();
-//                })
-                .doOnConnect(c -> log.info("Client connected!"))
-                .doOnDisconnected(c -> log.info("Client disconnected!"))
-                .connectNow();
+    //@Bean
+    public void peersConnection() throws RocksDBException {
+        RocksIterator peerIterator = this.storages.peers().getRaw().newIterator();
 
-        connections.add(connection);
+        List<Peer> peers = new ArrayList<>();
 
-        return connections;
+        for(peerIterator.seekToFirst(); peerIterator.isValid(); peerIterator.next()){
+            peers.add((Peer) SerializationUtils.deserialize(peerIterator.value()));
+        }
+
+
+        peers.forEach(peer -> {
+            Connection connection = TcpClient.create()
+                    .host(peer.getAddress())
+                    .port(7331)
+                    .option(ChannelOption.SO_KEEPALIVE, true)
+                    .handle(((inbound, outbound) -> {
+                        return outbound.neverComplete();
+                    }))
+                    .doOnConnect(c -> log.info("P2P connection established!"))
+                    .doOnDisconnected(c -> log.info("Disconnected!"))
+                    .connectNow();
+
+            this.connection.add(connection);
+        });
+    }
+
+    public List<Connection> getP2P() {
+        return this.connection;
     }
 }
