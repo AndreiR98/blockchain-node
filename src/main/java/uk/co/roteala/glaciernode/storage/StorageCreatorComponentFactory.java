@@ -27,12 +27,15 @@ public class StorageCreatorComponentFactory{
     private RocksDB wallet;
     private RocksDB tx;
 
+    private RocksDB chainState;
+
     public StorageCreatorComponentFactory() throws RocksDBException {
         this.peers = initPeersStorage();
         this.mempool = initMempoolStorage();
         this.blocks = initBocksStorage();
         this.wallet = initWalletStorage();
         this.tx = initTransactionStorage();
+        this.chainState = iniChainStateStorage();
     }
 
     public RocksDB getStorage(StorageType type) {
@@ -54,6 +57,9 @@ public class StorageCreatorComponentFactory{
             case MEMPOOL:
                 db = this.mempool;
                 break;
+            case CHAIN:
+                db = this.chainState;
+                break;
         }
 
         return db;
@@ -72,6 +78,34 @@ public class StorageCreatorComponentFactory{
                 path = configs.getRootWindows()+configs.getPeersPath();
             } else {
                 path = configs.getRootLinux()+configs.getPeersPath();
+            }
+            final DbPath pathDb = new DbPath(Path.of(path), 1L);
+
+            options.setDbLogDir(path+"/logs");
+            options.setDbPaths(List.of(pathDb));
+
+            log.info("Open storage at:{}",path);
+
+            return RocksDB.open(options, path);
+        }catch (Exception e) {
+            log.error("Unable to open sotrage at:");
+            throw new RocksDBException(e.getMessage());
+        }
+    }
+
+    private RocksDB iniChainStateStorage() throws RocksDBException {
+        try{
+            Options options = new Options();
+            options.setCreateIfMissing(true);
+
+            String path = null;
+
+            //Implement system check
+            if(GlacierUtils.getSystem()){
+                //use windows path
+                path = configs.getRootWindows()+configs.getChainPath();
+            } else {
+                path = configs.getRootLinux()+configs.getChainPath();
             }
             final DbPath pathDb = new DbPath(Path.of(path), 1L);
 

@@ -23,12 +23,12 @@ public class StorageCreatorComponent implements StoragesCreatorComponent {
     }
 
     @Override
-    public StorageComponent mempool() throws RocksDBException {
+    public StorageComponent mempool() {
         return new StorageComponent(storageCreatorComponent.getStorage(StorageType.MEMPOOL));
     }
 
     @Override
-    public StorageComponent wallet() throws RocksDBException {
+    public StorageComponent wallet() {
         return new StorageComponent(storageCreatorComponent.getStorage(StorageType.WALLET));
     }
 
@@ -45,6 +45,11 @@ public class StorageCreatorComponent implements StoragesCreatorComponent {
     @Override
     public StorageComponent peers() throws RocksDBException {
         return new StorageComponent(storageCreatorComponent.getStorage(StorageType.PEERS));
+    }
+
+    @Override
+    public StorageComponent chainState() throws RocksDBException {
+        return new StorageComponent(storageCreatorComponent.getStorage(StorageType.CHAIN));
     }
 
 }

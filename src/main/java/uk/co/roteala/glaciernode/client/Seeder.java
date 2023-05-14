@@ -47,8 +47,8 @@ public class Seeder {
 
     @Bean
     public void seederConnection() {
-        this.connection = TcpClient.create()
-                .host("18.133.139.246")
+        TcpClient.create()
+                .host("92.88.73.211")
                 .option(ChannelOption.SO_KEEPALIVE, true)
                 .port(7331)
                 .handle(((inbound, outbound) -> {
@@ -65,6 +65,12 @@ public class Seeder {
                             .flatMap(event -> {
                                 return outbound.sendByteArray(Flux.just(SerializationUtils.serialize(event)));
                             }).subscribe();
+
+//                    Flux.just(EventsMessageFactory.peers().serialize())
+//                                    .map(bytes -> {
+//                                        return (Event) SerializationUtils.deserialize(bytes);
+//                                    })
+//                            .flatMap((event) -> outbound.sendByteArray(Flux.just(SerializationUtils.serialize(event))));
 
 
                     //Handle incoming data
@@ -83,9 +89,6 @@ public class Seeder {
                 .doOnConnect(c -> log.info("Seeder connected!"))
                 .doOnDisconnected(c -> log.info("Seeder disconnected!"))
                 .connectNow();
-
-
-
     }
 
     //TODO:Add handlers for each type

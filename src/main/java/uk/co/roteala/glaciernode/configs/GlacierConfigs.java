@@ -36,4 +36,7 @@ public class GlacierConfigs {
     private static final String TX_PATH = "/transactions";
 
     private String txPath = TX_PATH;
+
+    private static final String CHAIN_PATH = "/chainstate";
+    private String chainPath = CHAIN_PATH;
 }

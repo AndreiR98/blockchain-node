@@ -10,6 +10,7 @@ import org.springframework.stereotype.Component;
 import reactor.netty.Connection;
 import uk.co.roteala.glaciernode.client.PeerCreatorFactory;
 import uk.co.roteala.glaciernode.client.Seeder;
+import uk.co.roteala.glaciernode.miner.Miner;
 import uk.co.roteala.glaciernode.server.Server;
 import uk.co.roteala.glaciernode.services.ConnectionServices;
 
@@ -22,28 +23,31 @@ public class Node {
 
     private PeerCreatorFactory creatorFactory;
 
-//    @Autowired
-//    private Seeder seeder;
+    @Autowired
+    private Seeder seeder;
+
+    @Autowired
+    private Miner miner;
     private List<Connection> connnections;
 
     /**
      * Start the seeder and all the connections between nodes
      * */
-    @Bean
+    //@Bean
     public void startNode() throws InterruptedException, RocksDBException {
-        Server server = new Server();
+        if(miner.getFlag()){
+            log.info("Test:{}", miner.getFlag());
+        }
 
-        server.initServer();
 
-
-        Seeder seeder = new Seeder();
-        seeder.seederConnection();
+//        Seeder seeder = new Seeder();
+//        seeder.seederConnection();
 
         Thread.sleep(1000);
 
-        creatorFactory.peersConnection();
-
-        this.connnections = creatorFactory.getP2P();
+//        creatorFactory.peersConnection();
+//
+//        this.connnections = creatorFactory.getP2P();
 
     }
 }

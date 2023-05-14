@@ -15,6 +15,7 @@ import reactor.netty.Connection;
 import uk.co.roteala.common.*;
 import uk.co.roteala.common.monetary.Coin;
 import uk.co.roteala.glaciernode.client.PeerCreatorFactory;
+import uk.co.roteala.glaciernode.miner.Miner;
 import uk.co.roteala.glaciernode.services.ConnectionServices;
 import uk.co.roteala.glaciernode.storage.StorageCreatorComponent;
 import uk.co.roteala.utils.GlacierUtils;
@@ -37,6 +38,9 @@ public class TxController {
 
     @Autowired
     private StorageCreatorComponent storages;
+
+    @Autowired
+    private Miner miner;
 
     private final ConnectionServices services;
     @GetMapping("/account")
@@ -102,6 +106,19 @@ public class TxController {
         HttpHeaders headers = new HttpHeaders();
 
         return new ResponseEntity<>(ids, headers, HttpStatus.OK);
+    }
+
+    @PostMapping("/mining")
+    public void mining(@RequestBody AccountEntry privateKey) throws NoSuchAlgorithmException, RocksDBException {
+        //Start and stop the miner
+
+
+
+        if(miner.getFlag()){
+            miner.stop();
+        } else {
+            miner.start(privateKey.getAddress());
+        }
     }
 
 

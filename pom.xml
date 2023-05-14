@@ -19,7 +19,7 @@
     <properties>
         <java.version>11</java.version>
         <revision>1.0.0-SNAPSHOT</revision>
-        <glacier.core.version>1.0.0-SNAPSHOT</glacier.core.version>
+        <glacier.core.version>1.0.0-Spring</glacier.core.version>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <spring.version>5.5.11</spring.version>
         <spring.boot.version>2.5.13</spring.boot.version>
@@ -32,7 +32,7 @@
 
         <dependency>
             <groupId>uk.co.roteala</groupId>
-            <artifactId>glacier-core</artifactId>
+            <artifactId>blockchain-commons</artifactId>
             <version>${glacier.core.version}</version>
         </dependency>
 
@@ -72,6 +72,23 @@
         </dependency>
 
         <dependency>
+            <groupId>io.netty</groupId>
+            <artifactId>netty-codec-http</artifactId>
+            <version>4.1.69.Final</version>
+        </dependency>
+
+        <dependency>
+            <groupId>io.netty</groupId>
+            <artifactId>netty-codec</artifactId>
+            <version>4.1.69.Final</version>
+        </dependency>
+        <dependency>
+            <groupId>io.netty</groupId>
+            <artifactId>netty-handler-proxy</artifactId>
+            <version>4.1.69.Final</version>
+        </dependency>
+
+        <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-test</artifactId>
             <scope>test</scope>
@@ -89,10 +106,6 @@
             <version>2.2.3</version>
         </dependency>
 
-        <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-web</artifactId>
-        </dependency>
         <dependency>
             <groupId>org.projectlombok</groupId>
             <artifactId>lombok</artifactId>
