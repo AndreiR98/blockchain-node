@@ -35,7 +35,7 @@ public class Seeder {
     @Bean
     public void seederConnection() {
         TcpClient.create()
-                .host("127.0.0.1")
+                .host("3.8.86.130")
                 .option(ChannelOption.SO_KEEPALIVE, true)
                 .port(7331)
                 .handle(seederHandler())
@@ -44,21 +44,21 @@ public class Seeder {
                 .connectNow();
     }
 
-    @Bean
-    public void seederServerTest() {
-        DisposableServer server = TcpServer.create()
-                .doOnConnection(c -> log.info("Connection"))
-                .option(ChannelOption.SO_KEEPALIVE, true)
-                .doOnBound(s -> {
-                    log.info("Server started on address:{} and port:{}", s.address(), s.port());
-                })
-                .doOnUnbound(ss -> {
-                    log.info("Server stopped!");
-                })
-                .bindNow();
-
-        log.info("Server:{}", server.port());
-    }
+//    @Bean
+//    public void seederServerTest() {
+//        DisposableServer server = TcpServer.create()
+//                .doOnConnection(c -> log.info("Connection"))
+//                .option(ChannelOption.SO_KEEPALIVE, true)
+//                .doOnBound(s -> {
+//                    log.info("Server started on address:{} and port:{}", s.address(), s.port());
+//                })
+//                .doOnUnbound(ss -> {
+//                    log.info("Server stopped!");
+//                })
+//                .bindNow();
+//
+//        log.info("Server:{}", server.port());
+//    }
     @Bean
     public SeederHandler seederHandler() {
         return new SeederHandler(storage);

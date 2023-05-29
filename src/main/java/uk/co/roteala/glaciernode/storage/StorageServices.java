@@ -181,6 +181,10 @@ public class StorageServices {
         }
     }
 
+//    public void deletePeer(Peer peer){
+//        final byte[] searializedKey = ()
+//    }
+
     public List<Peer> getPeersFromStorage() throws RocksDBException {
         List<Peer> peers = new ArrayList<>();
 
