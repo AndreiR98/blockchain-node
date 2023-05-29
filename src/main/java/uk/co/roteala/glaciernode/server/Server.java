@@ -19,8 +19,6 @@ public class Server {
                 .doOnConnection(c -> log.info("Connection received from:{}", c.address()))
                 .doOnBound(s -> log.info("Server started on:{}!", s.port()))
                 .option(ChannelOption.SO_KEEPALIVE, true)
-                .bindNow()
-                .onDispose()
-                .block();
+                .bindNow();
     }
 }

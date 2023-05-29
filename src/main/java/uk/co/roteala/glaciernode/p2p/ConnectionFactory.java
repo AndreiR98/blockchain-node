@@ -32,13 +32,17 @@ public class ConnectionFactory {
         if(numberPeers > 50) {
             do {
                 for (Peer peer : storage.getPeersFromStorage()) {
-                    createConnection(peer);
+                    if(peer.isActive()){
+                        createConnection(peer);
+                    }
                     nb++;
                 }
             } while (nb <= 49);
         } else {
             for (Peer peer : storage.getPeersFromStorage()) {
-                createConnection(peer);
+                if(peer.isActive()){
+                    createConnection(peer);
+                }
             }
         }
 
@@ -49,18 +53,15 @@ public class ConnectionFactory {
 
     private void createConnection(Peer peer){
         try {
-            Connection connection = TcpClient.create()
+            TcpClient.create()
                     .host(peer.getAddress())
-                    .port(peer.getPort() + 1)
-                    .doOnConnect(c -> log.info("Connection created sucessfully with:{}", peer.getAddress()))
+                    .port(peer.getPort() - 1)
+                    .doOnConnect(c -> log.info("Connection created successfully with:{}", peer.getAddress()))
+                    .doOnConnected(c -> connections.add(c))
                     .doOnDisconnected(c -> log.info("Connection disrupted"))
                     .connectNow();
-
-            if(!connection.isDisposed()) {
-                connections.add(connection);
-            }
         } catch (Exception e) {
-            //storage.deletePeer(peer);
+            storage.updatePeerStatus(peer, false);
             log.info("Failed to connect with:{}", peer.getAddress());
         }
     }
