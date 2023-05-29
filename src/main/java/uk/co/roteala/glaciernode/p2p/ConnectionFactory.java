@@ -27,13 +27,21 @@ public class ConnectionFactory {
     public List<Connection> getConnections() throws RocksDBException {
         int nb = 0;
         log.info("===START CREATING P2P CONNECTIONS===");
-        storage.getPeersFromStorage().forEach(this::createConnection);
-        do {
+        Integer numberPeers = storage.getPeersFromStorage().size();
+
+        if(numberPeers > 50) {
+            do {
+                for (Peer peer : storage.getPeersFromStorage()) {
+                    createConnection(peer);
+                    nb++;
+                }
+            } while (nb <= 49);
+        } else {
             for (Peer peer : storage.getPeersFromStorage()) {
                 createConnection(peer);
-                nb++;
             }
-        } while (nb <= 49);
+        }
+
 
         log.info("===CONNECTIONS CREATED({})===", nb);
         return connections;
@@ -43,7 +51,7 @@ public class ConnectionFactory {
         try {
             Connection connection = TcpClient.create()
                     .host(peer.getAddress())
-                    .port(peer.getPort() - 1)
+                    .port(peer.getPort() + 1)
                     .doOnConnect(c -> log.info("Connection created sucessfully with:{}", peer.getAddress()))
                     .doOnDisconnected(c -> log.info("Connection disrupted"))
                     .connectNow();

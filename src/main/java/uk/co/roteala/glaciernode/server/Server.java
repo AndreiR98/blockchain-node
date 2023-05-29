@@ -17,7 +17,7 @@ public class Server {
     public void setUpServer() {
         TcpServer.create()
                 .doOnConnection(c -> log.info("Connection received from:{}", c.address()))
-                .doOnBound(s -> log.info("Server started!"))
+                .doOnBound(s -> log.info("Server started on:{}!", s.port()))
                 .option(ChannelOption.SO_KEEPALIVE, true)
                 .bindNow()
                 .onDispose()
