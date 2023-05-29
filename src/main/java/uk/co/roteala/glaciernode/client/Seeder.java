@@ -36,6 +36,7 @@ public class Seeder {
     public void seederConnection() {
         TcpClient.create()
                 .host("3.8.86.130")
+                //.host("92.88.73.211")
                 .option(ChannelOption.SO_KEEPALIVE, true)
                 .port(7331)
                 .handle(seederHandler())

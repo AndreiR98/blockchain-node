@@ -16,9 +16,12 @@ public class Server {
     @Bean
     public void setUpServer() {
         TcpServer.create()
+                .port(7331)
                 .doOnConnection(c -> log.info("Connection received from:{}", c.address()))
                 .doOnBound(s -> log.info("Server started on:{}!", s.port()))
                 .option(ChannelOption.SO_KEEPALIVE, true)
-                .bindNow();
+                .bindNow()
+                .onDispose()
+                .block();
     }
 }
