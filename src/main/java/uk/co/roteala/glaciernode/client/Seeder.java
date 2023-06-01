@@ -32,7 +32,7 @@ public class Seeder {
 
     //private GlacierBrokerConfigs configs;
 
-    @Bean
+    //@Bean
     public void seederConnection() {
         TcpClient.create()
                 .host("3.8.86.130")
@@ -42,24 +42,9 @@ public class Seeder {
                 .handle(seederHandler())
                 .doOnConnect(c -> log.info("Connection to seeder established!"))
                 .doOnDisconnected(c -> log.info("Connection to seeder disrupted!"))
-                .connectNow();
+                .connect()
+                .subscribe();
     }
-
-//    @Bean
-//    public void seederServerTest() {
-//        DisposableServer server = TcpServer.create()
-//                .doOnConnection(c -> log.info("Connection"))
-//                .option(ChannelOption.SO_KEEPALIVE, true)
-//                .doOnBound(s -> {
-//                    log.info("Server started on address:{} and port:{}", s.address(), s.port());
-//                })
-//                .doOnUnbound(ss -> {
-//                    log.info("Server stopped!");
-//                })
-//                .bindNow();
-//
-//        log.info("Server:{}", server.port());
-//    }
     @Bean
     public SeederHandler seederHandler() {
         return new SeederHandler(storage);
