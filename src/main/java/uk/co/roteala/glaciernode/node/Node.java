@@ -30,6 +30,8 @@ public class Node {
     private boolean networkMode = true;
     @Bean
     public void startNode() throws RocksDBException {
+        setGenesis();
+
         startServer();
 
         startConnectionFactory();

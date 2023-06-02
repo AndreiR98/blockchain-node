@@ -15,17 +15,23 @@ public class GlacierConfigs {
 
     private String rootWindows = ROOT_WINDOWS;
 
+    private static final String LOGS = "/logs";
+
     private static final String PEERS_PATH = "/roteala/peers/";
 
     private File peersPath = new File(Paths.get(ROOT_WINDOWS, PEERS_PATH).toString());
+
+    private File peersPathLogs = new File(Paths.get(ROOT_WINDOWS, PEERS_PATH, LOGS).toString());
 
     private static final String BLOCKS_PATH = "/roteala/data/";
 
     private File blocksPath = new File(Paths.get(ROOT_WINDOWS, BLOCKS_PATH).toString());
 
+    private File blocksPathLogs = new File(Paths.get(ROOT_WINDOWS, BLOCKS_PATH, LOGS).toString());
+
     private static final String MEMPOOL_PATH = "/roteala/mempool/";
 
     private File mempoolPath = new File(Paths.get(ROOT_WINDOWS, MEMPOOL_PATH).toString());
 
-
+    private File mempoolPathLogs = new File(Paths.get(ROOT_WINDOWS, MEMPOOL_PATH, LOGS).toString());
 }

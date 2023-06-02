@@ -28,6 +28,7 @@ public class Storage {
         try {
             Options options = new Options();
             options.setCreateIfMissing(true);
+            options.setDbLogDir(configs.getMempoolPathLogs().getAbsolutePath());
             log.info("Open storage at:{}", configs.getMempoolPath().getAbsolutePath());
 
             return RocksDB.open(options, configs.getMempoolPath().getAbsolutePath());
@@ -44,6 +45,7 @@ public class Storage {
         try {
             Options options = new Options();
             options.setCreateIfMissing(true);
+            options.setDbLogDir(configs.getPeersPathLogs().getAbsolutePath());
             log.info("Open storage at:{}", configs.getPeersPath().getAbsolutePath());
 
             return RocksDB.open(options, configs.getPeersPath().getAbsolutePath());
@@ -60,6 +62,7 @@ public class Storage {
         try {
             Options options = new Options();
             options.setCreateIfMissing(true);
+            options.setDbLogDir(configs.getBlocksPathLogs().getAbsolutePath());
             log.info("Open storage at:{}", configs.getBlocksPath().getAbsolutePath());
 
             return RocksDB.open(options, configs.getBlocksPath().getAbsolutePath());
