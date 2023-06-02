@@ -13,14 +13,8 @@ import reactor.netty.tcp.TcpServer;
 @RequiredArgsConstructor
 public class Server {
 
-    @Bean
+    //@Bean
     public void setUpServer() {
-        TcpServer.create()
-                .port(7331)
-                .doOnConnection(c -> log.info("Connection received from:{}", c.address()))
-                .option(ChannelOption.SO_KEEPALIVE, true)
-                .bind()
-                .doOnSuccess(s -> log.info("Server started on:{}!", s.port()))
-                .subscribe();
+
     }
 }

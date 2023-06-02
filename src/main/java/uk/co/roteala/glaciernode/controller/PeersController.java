@@ -12,9 +12,9 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import uk.co.roteala.common.MockAccount;
-import uk.co.roteala.glaciernode.security.ECKey;
 import uk.co.roteala.glaciernode.storage.StorageServices;
 import uk.co.roteala.net.Peer;
+import uk.co.roteala.security.ECKey;
 import uk.co.roteala.utils.GlacierUtils;
 
 import java.security.InvalidAlgorithmParameterException;

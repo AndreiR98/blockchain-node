@@ -32,7 +32,6 @@ public class StorageServices {
                     .createColumnFamily(new ColumnFamilyDescriptor("blocks".getBytes()));
 
             storage.put(blockCF, serializedKey, serializedData);
-            storage.flush(new FlushOptions().setWaitForFlush(true));
         }catch (Exception e){
             new Exception("Storage exception, while adding blocks" + e);
         }
@@ -77,7 +76,6 @@ public class StorageServices {
                     .createColumnFamily(new ColumnFamilyDescriptor("transactions".getBytes()));
 
             storage.put(transactionCF, serializedKey, serializedData);
-            storage.flush(new FlushOptions().setWaitForFlush(true));
         } catch (Exception e) {
             new Exception("Storage exception, while adding new transactions" + e);
         }
@@ -175,6 +173,7 @@ public class StorageServices {
             }
 
             storage.put(serializedKey, serializedPeer);
+            storage.flush(new FlushOptions().setWaitForFlush(true));
         } catch (RocksDBException e) {
             log.error("Failed to store peer"+ serializedPeer + e);
             //throw new RocksDBException("Error");
