@@ -12,9 +12,12 @@ import reactor.core.scheduler.Schedulers;
 import reactor.netty.Connection;
 import reactor.netty.tcp.TcpClient;
 import reactor.netty.tcp.TcpServer;
+import uk.co.roteala.common.*;
+import uk.co.roteala.common.monetary.Coin;
 import uk.co.roteala.glaciernode.handlers.SeederHandler;
 import uk.co.roteala.glaciernode.storage.StorageServices;
 
+import java.math.BigInteger;
 import java.util.List;
 
 @Slf4j
@@ -22,7 +25,7 @@ import java.util.List;
 @RequiredArgsConstructor
 public class Node {
     private final StorageServices storage;
-    private List<Connection> connections;
+    private final List<Connection> connections;
 
     private boolean networkMode = true;
     @Bean
@@ -43,7 +46,7 @@ public class Node {
     }
 
     private void startConnectionFactory() throws RocksDBException {
-        if (!storage.getPeersFromStorage().isEmpty() && connections.size() < 5){
+        if (this.connections.size() < 5){
                 connectionFactory();
         } else {
             //Retrieve the peers from seeder
@@ -123,5 +126,55 @@ public class Node {
     @Bean
     public SeederHandler seederHandler() {
         return new SeederHandler(storage);
+    }
+
+    public void setGenesis() throws RocksDBException {
+        BaseBlockModel block = new BaseBlockModel();
+        block.setVersion(0x10);
+        block.setMarkleRoot("51d0be80dc114734d9e9727db5f04b3fe3cf54a9b168a780e43c9867120edc56");
+        block.setTimeStamp(1685717651791L);
+        block.setNonce(new BigInteger("2365481254789655550"));
+        block.setPreviousHash("0000000000000000000000000000000000000000000000000000000000000000");
+        block.setNumberOfBits(957);
+        block.setDifficulty(new BigInteger("1"));
+        block.setTransactions(List.of("51d0be80dc114734d9e9727db5f04b3fe3cf54a9b168a780e43c9867120edc56"));
+        block.setIndex(0);
+        block.setHash("d0bdfc7e6ede0d0dca9724909feb0f2a767f0f9780a6b1e7282709b4c58aaeef");
+        block.setMiner("16wRoKZXiETVRKvuucy4NFnYbiiKZ8ZUSx");
+        block.setConfirmations(1);
+        block.setStatus(BlockStatus.MINED);
+
+        UTXO in = new UTXO();
+        in.setCoinbase(true);
+        in.setAddress(null);
+        in.setValue(null);
+        in.setPubKeyScript("b20d4f2141768c75c59fa74291b0034288d913d601e2dc8ec678abdafa8be4de");
+        in.setSigScript(null);
+        in.setTxid("0000000000000000000000000000000000000000000000000000000000000000");
+
+        UTXO out = new UTXO();
+        out.setCoinbase(true);
+        out.setAddress("16wRoKZXiETVRKvuucy4NFnYbiiKZ8ZUSx");
+        out.setPubKeyScript("b20d4f2141768c75c59fa74291b0034288d913d601e2dc8ec678abdafa8be4de");
+        out.setValue(Coin.valueOf(100));
+        out.setSpender(null);
+        out.setSpent(false);
+        out.setTxid("51d0be80dc114734d9e9727db5f04b3fe3cf54a9b168a780e43c9867120edc56");
+
+        TransactionBaseModel tx = new TransactionBaseModel();
+        tx.setHash("51d0be80dc114734d9e9727db5f04b3fe3cf54a9b168a780e43c9867120edc56");
+        tx.setBlockHash("d0bdfc7e6ede0d0dca9724909feb0f2a767f0f9780a6b1e7282709b4c58aaeef");
+        tx.setBlockNumber(0);
+        tx.setFees(Coin.ZERO);
+        tx.setVersion(0x10);
+        tx.setTransactionIndex(0);
+        tx.setTimeStamp(1685717651791L);
+        tx.setConfirmations(1);
+        tx.setBlockNumber(0);
+        tx.setStatus(TransactionStatus.SUCCESS);
+
+        storage.addBlock(block.getHash(), block);
+        storage.addTransaction(tx.getHash(), tx);
+        storage.flush();
     }
 }

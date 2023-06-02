@@ -209,4 +209,13 @@ public class StorageServices {
 
         return peers;
     }
+
+    public void flush() {
+        try{
+            storages.getStorageData().flush(new FlushOptions().setWaitForFlush(true));
+        } catch (Exception e) {
+            log.info("Failed to flush!");
+        }
+
+    }
 }

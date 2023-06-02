@@ -11,6 +11,7 @@ import org.bouncycastle.math.ec.custom.sec.SecP256K1Curve;
 import org.bouncycastle.math.ec.custom.sec.SecP256K1Point;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.util.SerializationUtils;
 import uk.co.roteala.common.*;
 import uk.co.roteala.common.monetary.Coin;
 import uk.co.roteala.security.ECKey;
@@ -34,59 +35,91 @@ public class Miner {
     }
 
     private String computePublicScript() {
-        String script = HashingFactory.sha256Hash((ecKey().getPublicKey().getX() + ecKey().getPublicKey().getY()).getBytes()).toString();
+        String script = bytesToHexString(HashingFactory.sha256Hash((ecKey().getPublicKey().getX() + ecKey().getPublicKey().getY()).getBytes()));
 
         return script;
     }
 
-    @Bean
-    public void mine() throws NoSuchAlgorithmException, InvalidKeyException {
-        UTXO in = new UTXO();
-        in.setCoinbase(true);
-        in.setAddress(null);
-        in.setValue(null);
-        in.setPubKeyScript(null);
-        //in.setSigScript(ecKey(), null);
-        in.setTxid("0000000000000000000000000000000000000000000000000000000000000000");
-
-        UTXO out = new UTXO();
-        out.setAddress(ecKey().getPublicKey().toAddress());
-        out.setPubKeyScript(computePublicScript());
-        out.setValue(Coin.valueOf(100));
-        out.setSpender(null);
-        out.setSpent(false);
-
-        TransactionBaseModel tx = new TransactionBaseModel();
-        tx.setBlockHash(null);
-        tx.setBlockNumber(0);
-        tx.setFees(Coin.ZERO);
-        tx.setVersion(0x10);
-        tx.setTransactionIndex(0);
-        tx.setIn(List.of(in));
-        tx.setOut(List.of(out));
-        tx.setTimeStamp(System.currentTimeMillis());
-        tx.setStatus(TransactionStatus.SUCCESS);
-        tx.setHash(tx.hashHeader());
-
-        BaseBlockModel block = new BaseBlockModel();
-        block.setVersion(0x10);
-        //block.setMarkleRoot(computeMarkleRoot(tx.getHash()));
-        block.setTimeStamp(System.currentTimeMillis());
-        block.setDifficulty(BigInteger.ONE);
-        block.setNonce(null);
-        block.setPreviousHash("0000000000000000000000000000000000000000000000000000000000000000");
-        //block.setNumberOfBits(computeNumberOfBytes(block));
-        block.setTransactions(List.of(tx.getHash()));
-        block.setIndex(0);
-        block.setConfirmations(1);
-        block.setStatus(BlockStatus.MINED);
-        block.setMiner(ecKey().getPublicKey().toAddress());
-        block.setHash(block.getHash());
-
-        log.info("Block:{}", block);
-        log.info("Transaction:{}", tx);
-        log.info("Signature:{}", returnSignature(in, ecKey()));
-    }
+    //@Bean
+//    public void mine() throws NoSuchAlgorithmException, InvalidKeyException {
+//        long time = System.currentTimeMillis();
+//
+//
+//        //Create pseudoBlock for hashing
+//        BaseBlockModel blockPseudo = new BaseBlockModel();
+//        blockPseudo.setVersion(0x10);
+//        //blockPseudo.setMarkleRoot(tx.getHash());
+//        blockPseudo.setTimeStamp(time);
+//        blockPseudo.setDifficulty(BigInteger.ONE);
+//        blockPseudo.setNonce(new BigInteger("2365481254789655550"));
+//        blockPseudo.setPreviousHash("0000000000000000000000000000000000000000000000000000000000000000");
+//        //blockPseudo.setTransactions(List.of(tx.getHash()));
+//        blockPseudo.setIndex(0);
+//        blockPseudo.setConfirmations(1);
+//        blockPseudo.setStatus(BlockStatus.MINED);
+//        blockPseudo.setMiner(ecKey().getPublicKey().toAddress());
+//        blockPseudo.setNumberOfBits(SerializationUtils.serialize(blockPseudo).length);
+//        blockPseudo.setHash(blockPseudo.hashHeader());
+//
+//
+//
+//        //Pseudo UTXO input
+//        UTXO inPseudo = new UTXO();
+//        inPseudo.setCoinbase(true);
+//        inPseudo.setAddress(null);
+//        inPseudo.setValue(null);
+//        inPseudo.setPubKeyScript(null);
+//        inPseudo.setSigScript(computePublicScript());
+//        inPseudo.setTxid("0000000000000000000000000000000000000000000000000000000000000000");
+//
+//
+//        UTXO in = new UTXO();
+//        in.setCoinbase(true);
+//        in.setAddress(null);
+//        in.setValue(null);
+//        in.setPubKeyScript(null);
+//        in.setSigScript(null);
+//        in.setTxid("0000000000000000000000000000000000000000000000000000000000000000");
+//
+//        UTXO out = new UTXO();
+//        out.setCoinbase(true);
+//        out.setAddress(ecKey().getPublicKey().toAddress());
+//        out.setPubKeyScript(computePublicScript());
+//        out.setValue(Coin.valueOf(100));
+//        out.setSpender(null);
+//        out.setSpent(false);
+//
+//        TransactionBaseModel txPseudo = new TransactionBaseModel();
+//        txPseudo.setBlockHash(blockPseudo.getHash());
+//        txPseudo.setBlockNumber(0);
+//        txPseudo.setFees(Coin.ZERO);
+//        txPseudo.setVersion(0x10);
+//        txPseudo.setTransactionIndex(0);
+//        txPseudo.setIn(List.of(inPseudo));
+//        txPseudo.setOut(List.of(out));
+//        txPseudo.setTimeStamp(time);
+//        txPseudo.setStatus(TransactionStatus.SUCCESS);
+//        txPseudo.setHash(txPseudo.hashHeader());
+//
+//
+//        out.setTxid(txPseudo.getHash());
+//
+//
+//        //Real Transaction
+//        TransactionBaseModel tx = txPseudo;
+//        //tx.setIn(List.of(inPseudo));
+//        tx.setOut(List.of(out));
+//        //tx.setHash(tx.hashHeader());
+//
+//        BaseBlockModel block = blockPseudo;
+//        blockPseudo.setMarkleRoot(tx.getHash());
+//        blockPseudo.setTransactions(List.of(tx.getHash()));
+//
+//
+//
+//        log.info("Block:{}", block);
+//        log.info("Transaction:{}", tx);
+//    }
 
 
     private String returnSignature(UTXO utxo, ECKey ecKey) throws NoSuchAlgorithmException, InvalidKeyException {
