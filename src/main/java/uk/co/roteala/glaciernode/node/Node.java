@@ -48,13 +48,9 @@ public class Node {
     }
 
     private void startConnectionFactory() throws RocksDBException {
+        seederConnection();
         if (this.connections.size() < 5){
                 connectionFactory();
-        } else {
-            //Retrieve the peers from seeder
-            seederConnection();
-
-            connectionFactory();
         }
     }
 
