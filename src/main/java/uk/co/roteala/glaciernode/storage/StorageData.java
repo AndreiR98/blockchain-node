@@ -9,14 +9,14 @@ import org.rocksdb.RocksDBException;
 @Data
 @RequiredArgsConstructor
 public class StorageData implements StorageInterface {
-    private final RocksDB storageData;
+    private final StorageHandlers storageData;
 
     private final RocksDB storagePeers;
 
     private final RocksDB storageMempool;
 
     @Override
-    public RocksDB getStorageData() {
+    public StorageHandlers getStorageData() {
         return storageData;
     }
 

@@ -30,10 +30,13 @@ public class Node {
     private boolean networkMode = true;
     @Bean
     public void startNode() throws RocksDBException {
-        setGenesis();
+        //TODO:Move to storage section
+        //setGenesis();
 
+        //OK
         startServer();
 
+        //Move the seeder in here too
         startConnectionFactory();
 
     }
@@ -48,7 +51,7 @@ public class Node {
     }
 
     private void startConnectionFactory() throws RocksDBException {
-        seederConnection();
+        //seederConnection();
         if (this.connections.size() < 5){
                 connectionFactory();
         }
@@ -62,27 +65,7 @@ public class Node {
         Flux.fromIterable(storage.getPeersFromStorage())
                 .publishOn(Schedulers.boundedElastic())
                 .flatMap(peer -> {
-                    if(peer.isActive()){
-//                                Connection ca = tcpClient.host(peer.getAddress())
-//                                        .port(networkMode ? 7331 : peer.getPort())
-//                                        .doOnConnect(c -> log.info("Trying to connect to..."))
-//                                        .doOnConnected(c -> {
-//                                            log.info("Connection created successfully with:{}", peer.getAddress());
-//                                        })
-//                                        .doOnDisconnected(c -> {
-//                                            connections.remove(c);
-//                                            log.info("Connection disrupted");
-//                                        })
-//                                        .connect()
-//                                        .doOnSuccess(connection -> connections.add(connection))
-//                                        .doOnError(throwable -> {
-//                                            log.info("Failed to connect...");
-//                                            storage.updatePeerStatus(peer, false);
-//                                        })
-//                                        .onErrorResume(throwable -> Mono.empty())
-//                                        .block();
-
-
+                    if(peer.isActive()){;
                         return tcpClient.host(peer.getAddress())
                                 .port(networkMode ? 7331 : peer.getPort())
                                 .doOnConnect(c -> log.info("Trying to connect to..."))
@@ -95,7 +78,7 @@ public class Node {
                                     log.info("Connection disrupted");
                                 })
                                 .connect()
-                                .doOnSuccess(connection -> this.connections.add(connection))
+                                .doOnSuccess(this.connections::add)
                                 .doOnError(throwable -> {
                                     log.info("Failed to connect...");
                                     storage.updatePeerStatus(peer, false);
@@ -126,7 +109,8 @@ public class Node {
         return new SeederHandler(storage);
     }
 
-    public void setGenesis() throws RocksDBException {
+    @Bean
+    public void setGenesis() throws Exception {
         BaseBlockModel block = new BaseBlockModel();
         block.setVersion(0x10);
         block.setMarkleRoot("51d0be80dc114734d9e9727db5f04b3fe3cf54a9b168a780e43c9867120edc56");
@@ -171,8 +155,8 @@ public class Node {
         tx.setBlockNumber(0);
         tx.setStatus(TransactionStatus.SUCCESS);
 
-        storage.addBlock(block.getHash(), block);
-        storage.addTransaction(tx.getHash(), tx);
-        storage.flush();
+        //storage.addBlock(block.getHash(), block);
+        //storage.addTransaction(tx.getHash(), tx);
+        //storage.flush();
     }
 }

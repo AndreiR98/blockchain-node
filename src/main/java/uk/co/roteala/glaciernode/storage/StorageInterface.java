@@ -5,7 +5,7 @@ import org.rocksdb.RocksDBException;
 import uk.co.roteala.net.Peer;
 
 public interface StorageInterface {
-    RocksDB getStorageData();
+    StorageHandlers getStorageData();
 
     RocksDB getPeers() throws RocksDBException;
 

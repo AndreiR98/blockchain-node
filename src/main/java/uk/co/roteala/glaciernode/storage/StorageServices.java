@@ -4,98 +4,58 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.rocksdb.*;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.context.annotation.Bean;
 import org.springframework.stereotype.Service;
 import org.springframework.util.SerializationUtils;
 import uk.co.roteala.common.BaseBlockModel;
 import uk.co.roteala.common.BaseEmptyModel;
 import uk.co.roteala.common.TransactionBaseModel;
+import uk.co.roteala.common.UTXO;
 import uk.co.roteala.net.Peer;
 
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 
 @Slf4j
 @Service
-@RequiredArgsConstructor
 public class StorageServices {
     @Autowired
     private StorageInterface storages;
 
-    public void addBlock(String key, BaseEmptyModel data) throws RocksDBException {
-        final byte[] serializedData = SerializationUtils.serialize(data);
-        final byte[] serializedKey = key.getBytes();
-
-        RocksDB storage = storages.getStorageData();
-
-        try {
-            final ColumnFamilyHandle blockCF = storage
-                    .createColumnFamily(new ColumnFamilyDescriptor("blocks".getBytes()));
-
-            storage.put(blockCF, serializedKey, serializedData);
-        }catch (Exception e){
-            new Exception("Storage exception, while adding blocks" + e);
-        }
-    }
-
-    public BaseBlockModel getBlockByKey(String key) throws RocksDBException {
-        final byte[] serializedKey;
-
-        BaseBlockModel block = null;
-
-        RocksDB storage = storages.getStorageData();
-
-        if(key != null) {
-            serializedKey = key.getBytes();
-
-            try {
-                final ColumnFamilyHandle blockCF = storage
-                        .createColumnFamily(new ColumnFamilyDescriptor("blocks".getBytes()));
-
-                block = (BaseBlockModel) SerializationUtils.deserialize(storage.get(blockCF, serializedKey));
-
-                if(block == null) {
-                    log.error("Failed to retrieve block with index:{}", key);
-                    new Exception("Failed to retrieve block");
-                }
-            } catch (Exception e){
-                new Exception("Storage failed to retrieve block:"+ e);
-            }
-        }
-
-        return block;
-    }
-
-    public void addTransaction(String key, TransactionBaseModel data) throws RocksDBException {
+    public void addTransaction(String key, TransactionBaseModel data) throws Exception {
         final byte[] serializedKey = key.getBytes();
         final byte[] serializedData = SerializationUtils.serialize(data);
 
-        RocksDB storage = storages.getStorageData();
+        RocksDB.loadLibrary();
+
+        StorageHandlers storage = storages.getStorageData();
 
         try {
-            final ColumnFamilyHandle transactionCF = storage
-                    .createColumnFamily(new ColumnFamilyDescriptor("transactions".getBytes()));
-
-            storage.put(transactionCF, serializedKey, serializedData);
+            storage.getDatabase().put(storage.getHandlers().get(1), serializedKey, serializedData);
+            storage.getDatabase().flush(new FlushOptions().setWaitForFlush(true));
         } catch (Exception e) {
-            new Exception("Storage exception, while adding new transactions" + e);
+            throw new Exception("Storage exception, while adding new transactions" + e);
         }
     }
 
     public TransactionBaseModel getTransactionByKey(String key) throws RocksDBException {
         final byte[] serializedKey;
 
+        RocksDB.loadLibrary();
+
         TransactionBaseModel transaction = null;
 
-        RocksDB storage = storages.getStorageData();
+        StorageHandlers storage = storages.getStorageData();
 
         if(key != null) {
             serializedKey = key.getBytes();
 
             try {
-                final ColumnFamilyHandle transactionCF = storage
-                        .createColumnFamily(new ColumnFamilyDescriptor("transactions".getBytes()));
-
-                transaction = (TransactionBaseModel) SerializationUtils.deserialize(storage.get(transactionCF, serializedKey));
+                transaction = (TransactionBaseModel) SerializationUtils.deserialize(
+                        storage.getDatabase().get(storage.getHandlers().get(1), serializedKey));
 
                 if(transaction == null) {
                     log.error("Failed to retrieve transaction with hash:{}", key);
@@ -107,6 +67,22 @@ public class StorageServices {
         }
 
         return transaction;
+    }
+
+    public void addBlock(String key, BaseBlockModel block) throws Exception {
+        final byte[] serializedKey = key.getBytes();
+        final byte[] serializedData = SerializationUtils.serialize(block);
+
+        RocksDB.loadLibrary();
+
+        StorageHandlers storage = storages.getStorageData();
+
+        try {
+            storage.getDatabase().put(storage.getHandlers().get(2), serializedKey, serializedData);
+            storage.getDatabase().flush(new FlushOptions().setWaitForFlush(true));
+        } catch (Exception e) {
+            throw new Exception("Storage exception, while adding new transactions" + e);
+        }
     }
 
     public void addMempool(String key, TransactionBaseModel transaction) throws RocksDBException {
@@ -210,12 +186,43 @@ public class StorageServices {
         return peers;
     }
 
-    public void flush() {
-        try{
-            storages.getStorageData().flush(new FlushOptions().setWaitForFlush(true));
-        } catch (Exception e) {
-            log.info("Failed to flush!");
+//    public void flush() {
+//        try{
+//            storages.getStorageData().flush(new FlushOptions().setWaitForFlush(true));
+//        } catch (Exception e) {
+//            log.info("Failed to flush!");
+//        }
+//
+//    }
+
+    public List<String> getAddressTransactions(String address) {
+        List<String> transactionByAddress = new ArrayList<>();
+
+        RocksDB.loadLibrary();
+
+        StorageHandlers storage = storages.getStorageData();
+
+        if (address != null) {
+            try (final RocksIterator iterator = storage.getDatabase()
+                    .newIterator(storage.getHandlers().get(1))) {
+
+                iterator.seekToFirst();
+
+                while (iterator.isValid()) {
+                    byte[] valueBytes = iterator.value();
+                    TransactionBaseModel transaction = (TransactionBaseModel) SerializationUtils.deserialize(valueBytes);
+
+                    if (transaction != null && Objects.equals(transaction.getTo(), address)) {
+                        transactionByAddress.add(transaction.getHash());
+                    }
+
+                    iterator.next();
+                }
+            } catch (Exception e) {
+                throw new RuntimeException("Failed to retrieve transactions from storage", e);
+            }
         }
 
+        return transactionByAddress;
     }
 }
