@@ -15,9 +15,4 @@ public class StorageHandlers {
     private RocksDB database;
     @Getter
     private List<ColumnFamilyHandle> handlers;
-
-//    public StorageHandlers(RocksDB database, List<ColumnFamilyHandle> handlers) {
-//        this.database = database;
-//        this.handlers = handlers;
-//    }
 }

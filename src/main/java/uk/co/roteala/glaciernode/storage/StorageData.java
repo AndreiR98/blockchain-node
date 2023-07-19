@@ -15,6 +15,8 @@ public class StorageData implements StorageInterface {
 
     private final RocksDB storageMempool;
 
+    private final RocksDB stateTrie;
+
     @Override
     public StorageHandlers getStorageData() {
         return storageData;
@@ -26,7 +28,12 @@ public class StorageData implements StorageInterface {
     }
 
     @Override
-    public RocksDB getMempool() throws RocksDBException {
+    public RocksDB getMempool(){
         return storageMempool;
+    }
+
+    @Override
+    public RocksDB getStateTrie() {
+        return stateTrie;
     }
 }

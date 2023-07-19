@@ -9,5 +9,7 @@ public interface StorageInterface {
 
     RocksDB getPeers() throws RocksDBException;
 
-    RocksDB getMempool() throws RocksDBException;
+    RocksDB getMempool();
+
+    RocksDB getStateTrie();
 }

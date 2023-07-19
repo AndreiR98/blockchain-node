@@ -1,0 +1,42 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: blockchain-node
+spec:
+  serviceName: node-service
+  replicas: 2
+  selector:
+    matchLabels:
+      app: blockchain-node
+  template:
+    metadata:
+      labels:
+        app: blockchain-node
+    spec:
+      containers:
+        - name: blockchain-node
+          image: blockchain-node
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 7331
+          env:
+            - name: POD_ORDINAL_INDEX
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.annotations['statefulset.kubernetes.io/pod-name']
+          volumeMounts:
+            - mountPath: /blockchain
+              subPath: node-${POD_ORDINAL_INDEX}
+              name: node-storage
+      volumes:
+        - name: node-storage
+          persistentVolumeClaim:
+            claimName: node-storage
+  volumeClaimTemplates:
+    - metadata:
+        name: node-storage
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 1Gi

@@ -1,0 +1,20 @@
+apiVersion: skaffold/v1beta15
+kind: Config
+build:
+  tagPolicy:
+    sha256: {}
+  artifacts:
+    - image: blockchain-node
+      context: .
+      jib:
+        args: ["-DskipTests=true"]
+        project: ""
+deploy:
+  kubectl:
+    manifests:
+      - .kubernetes-manifests/**.yml
+profiles:
+  - name: dockerfile
+    build:
+      artifacts:
+        - image: blockchain-node

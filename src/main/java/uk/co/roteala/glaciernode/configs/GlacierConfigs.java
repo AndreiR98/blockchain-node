@@ -1,7 +1,9 @@
 package uk.co.roteala.glaciernode.configs;
 
 import lombok.Getter;
+import lombok.NoArgsConstructor;
 import lombok.Setter;
+import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.context.annotation.Configuration;
 
 import java.io.File;
@@ -10,8 +12,10 @@ import java.nio.file.Paths;
 @Setter
 @Getter
 @Configuration
+@NoArgsConstructor
+@ConfigurationProperties(prefix = "roteala.blockchain")
 public class GlacierConfigs {
-    private static final String ROOT_WINDOWS = System.getenv("APPDATA");
+    private static final String ROOT_WINDOWS = "/blockchain/node-"+System.getenv("POD_ORDINAL_INDEX");
 
     private String rootWindows = ROOT_WINDOWS;
 
@@ -34,4 +38,12 @@ public class GlacierConfigs {
     private File mempoolPath = new File(Paths.get(ROOT_WINDOWS, MEMPOOL_PATH).toString());
 
     private File mempoolPathLogs = new File(Paths.get(ROOT_WINDOWS, MEMPOOL_PATH, LOGS).toString());
+
+    private static final String STATE_TRIE = "/roteala/state";
+
+    private File stateTriePath = new File(Paths.get(ROOT_WINDOWS, STATE_TRIE).toString());
+
+    private File stateTrieLogsPath = new File(Paths.get(ROOT_WINDOWS, STATE_TRIE, LOGS).toString());
+
+    private String minerPrivateKey;
 }
