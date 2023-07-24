@@ -7,7 +7,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.SerializationUtils;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import reactor.core.Disposable;
 import reactor.core.publisher.Mono;
 import reactor.netty.Connection;
 import reactor.netty.tcp.TcpClient;
@@ -16,20 +15,20 @@ import uk.co.roteala.common.events.ChainStateMessage;
 import uk.co.roteala.common.events.Message;
 import uk.co.roteala.common.events.MessageActions;
 import uk.co.roteala.common.monetary.MoveFund;
-import uk.co.roteala.glaciernode.handlers.BrokerConnectionHandler;
-import uk.co.roteala.glaciernode.miner.Miner;
-import uk.co.roteala.glaciernode.miner.Mining;
-import uk.co.roteala.glaciernode.p2p.PeerGroupConnections;
-import uk.co.roteala.glaciernode.p2p.PeersConnections;
-import uk.co.roteala.glaciernode.processor.MessageProcessor;
-import uk.co.roteala.glaciernode.processor.Processor;
+import uk.co.roteala.glaciernode.handlers.BrokerTransmissionHandler;
+import uk.co.roteala.glaciernode.p2p.BrokerConnectionStorage;
+import uk.co.roteala.glaciernode.p2p.ClientConnectionStorage;
+import uk.co.roteala.glaciernode.p2p.ServerConnectionStorage;
+import uk.co.roteala.glaciernode.processor.BrokerMessageProcessor;
 import uk.co.roteala.glaciernode.services.MoveBalanceExecutionService;
 import uk.co.roteala.glaciernode.storage.StorageServices;
 
-import java.time.Duration;
+import java.net.InetSocketAddress;
+import java.net.SocketAddress;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Consumer;
+import java.util.function.Supplier;
 
 @Slf4j
 @Configuration
@@ -37,63 +36,83 @@ import java.util.function.Consumer;
 public class NodeConfig {
     private final StorageServices storage;
 
-    private List<Connection> connections = new ArrayList<>();
+    private final GlacierConfigs config;
 
     @Bean
     public void startBrokerConnection() {
+        Supplier<SocketAddress> localAddressSupplier = () -> new InetSocketAddress(config.getNodeServerIP(), 7332);
+
         TcpClient.create()
                 .host("crawler-dns.default.svc.cluster.local")
-                //.host("92.88.73.211")
                 .option(ChannelOption.SO_KEEPALIVE, true)
+                //.host("localhost")
                 .port(7331)
-                .handle(brokerConnectionHandler())
-                .doOnConnected(connection -> {
-                    log.info("Connection to broker established!");
-                    requestSyncFromBroker(connection);
-                })
+                //.bindAddress(localAddressSupplier)
+                .handle(brokerTransmissionHandler())
+                .doOnConnected(requestSyncFromBroker())
                 .doOnDisconnected(c -> log.info("Connection to broker disrupted!"))
                 .connect()
                 .subscribe();
     }
 
     @Bean
-    public void startServer() {
-        TcpServer.create()
-                .doOnBound(server -> log.info("Server started on address:{} and port:{}", server.address(), server.port()))
-                .doOnUnbound(server -> log.info("Server stopped!"))
-                .port(7331)
-                .bindNow()
-                .onDispose();
-    }
-
-    public synchronized Connection requestSyncFromBroker(Connection connection) {
-        Message syncState = new ChainStateMessage(null);
-        syncState.setMessageAction(MessageActions.SYNC);
-
-        connection.outbound().sendObject(Mono
-                        .just(Unpooled.copiedBuffer(SerializationUtils.serialize(syncState))))
-                .then().subscribe();
-       return connection;
-    }
-
-    @Bean
-    public Consumer<Connection> connectionStorageHandler() {
+    public Consumer<Connection> requestSyncFromBroker() {
         return connection -> {
-            this.connections.add(connection);
+            log.info("Connection to broker started!");
+
+            Message syncState = new ChainStateMessage();
+            syncState.setMessageAction(MessageActions.REQUEST_SYNC);
+
+            connection.outbound().sendObject(Mono
+                            .just(Unpooled.copiedBuffer(SerializationUtils.serialize(syncState))))
+                    .then().subscribe();
         };
     }
 
     @Bean
-    public PeerGroupConnections peerGroupConnections() {
-        return new PeerGroupConnections();
+    public void startServer() {
+        TcpServer.create()
+                .host(config.getNodeServerIP())
+                .doOnConnection(serverConnectionStorage())
+                .doOnBound(server -> log.info("Server started on address:{} and port:{}", server.address(), config.getNodeServerIP()))
+                .doOnUnbound(server -> log.info("Server stopped!"))
+                //.port(7331)
+                .bindNow()
+                .onDispose();
     }
 
     /**
-     * Handles broker communication
+     * Keeps track of all incoming clients connections
      * */
     @Bean
-    public BrokerConnectionHandler brokerConnectionHandler() {
-        return new BrokerConnectionHandler(storage);
+    public ServerConnectionStorage serverConnectionStorage() {
+        return new ServerConnectionStorage();
+    }
+
+    /**
+     * Keeps track of broker connection
+     * */
+    @Bean
+    public BrokerConnectionStorage brokerConnectionStorage() {
+        return new BrokerConnectionStorage();
+    }
+
+    /**
+     * Keeps track of servers connections
+     * */
+    @Bean
+    public ClientConnectionStorage clientConnectionStorage() {
+        return new ClientConnectionStorage();
+    }
+
+    @Bean
+    public BrokerMessageProcessor brokerMessageProcessor() {
+        return new BrokerMessageProcessor();
+    }
+
+    @Bean
+    public BrokerTransmissionHandler brokerTransmissionHandler() {
+        return new BrokerTransmissionHandler(brokerMessageProcessor());
     }
 
     /**
@@ -107,21 +126,10 @@ public class NodeConfig {
     /**
      * Process messages from broker or other nodes
      * */
-    @Bean
-    public Processor messageProcessor() {
-        return new MessageProcessor(storage);
-    }
 
-    @Bean
-    public Mining miner() {
-        return new Miner(storage, messageProcessor());
-    }
 
-    /**
-     * Handles all peers connections, when we receive a new peers from the broker we create a new connection
-     * */
-//    @Bean
-//    public PeersConnections peersConnections() {
-//        return new PeersConnections(storage);
+    //@Bean
+//    public Mining miner() {
+//        return new Miner(storage);
 //    }
 }

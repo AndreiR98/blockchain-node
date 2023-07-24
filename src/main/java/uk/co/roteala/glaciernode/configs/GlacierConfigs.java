@@ -11,11 +11,12 @@ import java.nio.file.Paths;
 
 @Setter
 @Getter
-@Configuration
 @NoArgsConstructor
 @ConfigurationProperties(prefix = "roteala.blockchain")
 public class GlacierConfigs {
     private static final String ROOT_WINDOWS = "/blockchain/node-"+System.getenv("POD_ORDINAL_INDEX");
+
+    //private static final String ROOT_WINDOWS = System.getenv("APPDATA");
 
     private String rootWindows = ROOT_WINDOWS;
 
@@ -46,4 +47,6 @@ public class GlacierConfigs {
     private File stateTrieLogsPath = new File(Paths.get(ROOT_WINDOWS, STATE_TRIE, LOGS).toString());
 
     private String minerPrivateKey;
+
+    private String nodeServerIP;
 }

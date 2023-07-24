@@ -16,7 +16,6 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.util.SerializationUtils;
 import uk.co.roteala.common.*;
 import uk.co.roteala.common.monetary.Coin;
-import uk.co.roteala.glaciernode.processor.Processor;
 import uk.co.roteala.glaciernode.storage.StorageServices;
 import uk.co.roteala.security.ECKey;
 import uk.co.roteala.utils.BlockchainUtils;
@@ -38,7 +37,7 @@ import java.util.TreeSet;
 @RequiredArgsConstructor
 public class Miner implements Mining {
     private final StorageServices storage;
-    private final Processor processor;
+    //private final Processor processor;
 
     @Value("${roteala.blockchain.miner-private-key}")
     private String minerPrivateKey;
@@ -48,7 +47,6 @@ public class Miner implements Mining {
 
     //Starts the node
     @Override
-    @Bean
     public void start() {
         //Check if any
 
@@ -65,8 +63,7 @@ public class Miner implements Mining {
              * */
             boolean targetMatched = false;
 
-            if(false){
-                log.info("Mining started!");
+            if(true){
                 //Retrieve 120 random transaction
                 //TODO:When fees implemented, add sorting based on the fees too.
                 List<String> pseudoTransactionList = new ArrayList<>();
@@ -138,6 +135,7 @@ public class Miner implements Mining {
 
                     if(BlockchainUtils.computedTargetValue(proposedHash, miningTargetValue)) {
                         minedBlock = pseudoBlock;
+                        log.info("Hash:{}", minedBlock.getHash());
                         log.info("Mined block:{}", minedBlock);
                         targetMatched = true;
                         break;

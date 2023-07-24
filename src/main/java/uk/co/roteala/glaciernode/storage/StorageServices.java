@@ -7,6 +7,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import uk.co.roteala.common.*;
 import uk.co.roteala.common.Transaction;
+import uk.co.roteala.common.events.Message;
 import uk.co.roteala.exceptions.StorageException;
 import uk.co.roteala.exceptions.errorcodes.StorageErrorCode;
 import uk.co.roteala.net.Peer;
@@ -325,4 +326,8 @@ public class StorageServices {
 
         return account;
     }
+
+    //public List<AccountModel> getAllAccounts() {}
+
+    public void deleteData(Message message) {}
 }
