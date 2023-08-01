@@ -1,32 +1,25 @@
 package uk.co.roteala.glaciernode.miner;
 
+import io.netty.buffer.Unpooled;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.bouncycastle.jce.ECNamedCurveTable;
-import org.bouncycastle.jce.spec.ECNamedCurveParameterSpec;
-import org.bouncycastle.jce.spec.ECParameterSpec;
-import org.bouncycastle.math.ec.ECFieldElement;
-import org.bouncycastle.math.ec.ECPoint;
-import org.bouncycastle.math.ec.FixedPointCombMultiplier;
-import org.bouncycastle.math.ec.custom.sec.SecP256K1Curve;
-import org.bouncycastle.math.ec.custom.sec.SecP256K1Point;
+import org.apache.commons.lang3.SerializationUtils;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.util.SerializationUtils;
+import reactor.core.publisher.Mono;
 import uk.co.roteala.common.*;
-import uk.co.roteala.common.monetary.Coin;
+import uk.co.roteala.common.events.BlockMessage;
+import uk.co.roteala.common.events.MessageActions;
+import uk.co.roteala.glaciernode.p2p.BrokerConnectionStorage;
 import uk.co.roteala.glaciernode.storage.StorageServices;
 import uk.co.roteala.security.ECKey;
 import uk.co.roteala.utils.BlockchainUtils;
 
 
-import javax.crypto.Mac;
-import javax.crypto.spec.SecretKeySpec;
+
 import java.math.BigInteger;
-import java.security.InvalidKeyException;
-import java.security.NoSuchAlgorithmException;
-import java.security.spec.AlgorithmParameterSpec;
+
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -42,110 +35,137 @@ public class Miner implements Mining {
     @Value("${roteala.blockchain.miner-private-key}")
     private String minerPrivateKey;
 
+    private final BrokerConnectionStorage brokerConnectionStorage;
+
+    public final MiningWorker worker;
+
     private boolean isMining = true;
     private boolean hasMining = false;
 
     //Starts the node
     @Override
-    public void start() {
+    @Bean
+    public void start() throws InterruptedException {
         //Check if any
 
         ECKey privateKey = new ECKey(minerPrivateKey);
         Block minedBlock = new Block();
+        BigInteger maxNonce = new BigInteger("ffffffff", 16);
 
-        boolean isMining = true;
+        boolean isMining = false;
+        BigInteger nonce = BigInteger.ZERO;
+        long startTime = 0;
 
-        do {
-            /**
-             * 1.Search the storage if any transactions
-             * 2.If storage not empty retrieve pseudoTransaction
-             * 3.Start mining the block
-             * */
-            boolean targetMatched = false;
 
-            if(true){
-                //Retrieve 120 random transaction
-                //TODO:When fees implemented, add sorting based on the fees too.
-                List<String> pseudoTransactionList = new ArrayList<>();
-                //ChainState chainState = storage.getStateTrie();
 
-                int miningTargetValue = 2;
+        while(true) {
+            if (worker.isCanMine()) {
+                if(!storage.getPseudoTransactions().isEmpty()) {
+                    ChainState state = storage.getStateTrie();
 
-                //If no blocks then it will return genesis block
-                //Block previousBlock = storage.getBlockByIndex(chainState.getLastBlockIndex());
+                    if(!isMining) {
+                        log.info("Start mining...");
 
-                Block previousBlock = new Block();
-                previousBlock.setHash("0000000000000000000000000000000000000000000000000000000000000000");
-
-                List<String> pseudoTransactionMatches = new ArrayList<>();
-
-                Block pseudoBlock = new Block();
-                pseudoBlock.setMiner("Rotaru 'Roti' Andrei");
-                pseudoBlock.setIndex(0);
-                pseudoBlock.setDifficulty(miningTargetValue);
-                pseudoBlock.setPreviousHash(previousBlock.getHash());
-                pseudoBlock.setReward(Coin.ZERO);
-                pseudoBlock.setConfirmations(1);
-                pseudoBlock.setForkHash("0000000000000000000000000000000000000000000000000000000000000000");
-                pseudoBlock.setStatus(BlockStatus.MINED);
-                pseudoBlock.setVersion(0x16);
-                pseudoBlock.getTimeStamp();
-
-                int index = 0;
-
-                for (String pseudoHash : pseudoTransactionList) {
-                    PseudoTransaction pseudoTransaction = storage.getMempoolTransactionByKey(pseudoHash);
-
-                    pseudoTransactionMatches.add(BlockchainUtils.mapHashed(pseudoTransaction, pseudoBlock, index));
-                    index++;
-                }
-
-                //Order then alphabetically
-                Collections.sort(pseudoTransactionMatches);
-
-//                String markleRoot = BlockchainUtils
-//                        .markleRootGenerator(BlockchainUtils
-//                                .splitPseudoHashMatches(pseudoTransactionMatches)
-//                                .get(1));
-
-                //Prepare the pseudoBlock
-                pseudoBlock.setMarkleRoot("0000000000000000000000000000000000000000000000000000000000000000");
-                pseudoBlock.setTransactions(pseudoTransactionMatches);
-
-                BigInteger maxNonce = new BigInteger("ffffffff", 16);
-                BigInteger nonce = BigInteger.ZERO;
-
-                long timeStamp = System.currentTimeMillis();
-
-                //Mine the block
-                do {
-                    if(nonce.compareTo(maxNonce) == 0) {
+                        isMining = true;
                         nonce = BigInteger.ZERO;
-                        timeStamp = System.currentTimeMillis();
+                        startTime = System.currentTimeMillis();
+                    }
+
+                    List<PseudoTransaction> pseudoTransactions = storage.getPseudoTransactions();
+
+                    /**
+                     * Check the blocks in the mempool, for each block existing use that as the previous block
+                     * */
+
+                    //Compute the new block
+                    Block newBlock = blockFromTemplate(pseudoTransactions, state, nonce, startTime, privateKey);
+
+                    if(BlockchainUtils.computedTargetValue(newBlock.getHash(), state.getTarget())){
+
+                        BlockMessage blockMessage = new BlockMessage(newBlock);
+                        blockMessage.setMessageAction(MessageActions.MINED_BLOCK);
+                        blockMessage.setVerified(false);
+
+
+                        storage.addBlockMempool(newBlock.getHash(), newBlock);
+
+                        //Sent new mined block to broker
+                        brokerConnectionStorage.getConnection()
+                                .outbound().sendObject(Mono.just(
+                                        Unpooled.copiedBuffer(SerializationUtils.serialize(blockMessage))))
+                                .then()
+                                .subscribe();
+
+                        //Send new mined block to each node
+
+                        log.info("Block mined:{}", newBlock);
+                        updateMempoolTransactions(pseudoTransactions);
+                        isMining = false;
                     }
 
                     nonce = nonce.add(BigInteger.ONE);
+                } else {
+                    isMining = false;
+                    Thread.sleep(1000);
+                }
 
-                    pseudoBlock.setTimeStamp(timeStamp);
-                    pseudoBlock.setNonce(nonce.toString(16));
-                    pseudoBlock.setNumberOfBits(SerializationUtils.serialize(pseudoBlock).length);
-                    pseudoBlock.setHash(pseudoBlock.computeHash());
-
-                    String proposedHash = pseudoBlock.getHash();
-
-                    if(BlockchainUtils.computedTargetValue(proposedHash, miningTargetValue)) {
-                        minedBlock = pseudoBlock;
-                        log.info("Hash:{}", minedBlock.getHash());
-                        log.info("Mined block:{}", minedBlock);
-                        targetMatched = true;
-                        break;
-                    }
-                } while (!targetMatched);
-
+                if(nonce.compareTo(maxNonce) > 0) {
+                    nonce = BigInteger.ZERO;
+                    startTime += 1000;
+                }
             }
 
-        } while (isMining);
+        }
     }
+
+    private void updateMempoolTransactions(List<PseudoTransaction> mempoolHash) {
+        mempoolHash.forEach(transaction -> {
+
+            transaction.setStatus(TransactionStatus.PROCESSED);
+
+            storage.addMempool(transaction.getPseudoHash(), transaction);
+        });
+    }
+
+    private Block blockFromTemplate(List<PseudoTransaction> mempoolTransactions,
+                                    ChainState chainState, BigInteger nonce, long timeStamp, ECKey privateKey) {
+
+        List<String> mappedHashes = new ArrayList<>();
+        List<String> transactions = new ArrayList<>();
+
+        Block newBlock = new Block();
+
+        newBlock.setMiner(privateKey.getPublicKey().toAddress());
+        newBlock.setNonce(nonce.toString(16));
+        newBlock.setDifficulty(chainState.getTarget());
+        newBlock.setReward(chainState.getReward());
+        newBlock.setIndex(chainState.getLastBlockIndex() + 1);
+        newBlock.setTimeStamp(timeStamp);
+        newBlock.setConfirmations(1);
+        newBlock.setVersion(0x16);
+        newBlock.setStatus(BlockStatus.MINED);
+        newBlock.setPreviousHash(storage.getBlockByIndex(chainState.getLastBlockIndex()).getHash());
+        newBlock.setForkHash("0000000000000000000000000000000000000000000000000000000000000000");
+
+        mempoolTransactions.forEach(mempoolTransaction -> {
+            int i = 0;
+            final String mapHash = BlockchainUtils.mapHashed(mempoolTransaction, newBlock, i);
+            final String trueHash = mapHash.split("_")[1];
+
+            mappedHashes.add(mapHash);
+            transactions.add(trueHash);
+            i++;
+        });
+
+        newBlock.setTransactions(transactions);
+        newBlock.setMarkleRoot(BlockchainUtils.markleRootGenerator(transactions));
+        newBlock.setNumberOfBits(SerializationUtils.serialize(newBlock).length);
+        newBlock.setHash(newBlock.computeHash());
+        newBlock.setTransactions(mappedHashes);
+
+        return newBlock;
+    }
+
 
     //Stops
     @Override

@@ -16,19 +16,13 @@ import uk.co.roteala.common.events.Message;
 import uk.co.roteala.common.events.MessageActions;
 import uk.co.roteala.common.monetary.MoveFund;
 import uk.co.roteala.glaciernode.handlers.BrokerTransmissionHandler;
-import uk.co.roteala.glaciernode.p2p.BrokerConnectionStorage;
-import uk.co.roteala.glaciernode.p2p.ClientConnectionStorage;
-import uk.co.roteala.glaciernode.p2p.ServerConnectionStorage;
+import uk.co.roteala.glaciernode.miner.MiningWorker;
+import uk.co.roteala.glaciernode.p2p.*;
 import uk.co.roteala.glaciernode.processor.BrokerMessageProcessor;
 import uk.co.roteala.glaciernode.services.MoveBalanceExecutionService;
 import uk.co.roteala.glaciernode.storage.StorageServices;
 
-import java.net.InetSocketAddress;
-import java.net.SocketAddress;
-import java.util.ArrayList;
-import java.util.List;
 import java.util.function.Consumer;
-import java.util.function.Supplier;
 
 @Slf4j
 @Configuration
@@ -39,44 +33,60 @@ public class NodeConfig {
     private final GlacierConfigs config;
 
     @Bean
-    public void startBrokerConnection() {
-        Supplier<SocketAddress> localAddressSupplier = () -> new InetSocketAddress(config.getNodeServerIP(), 7332);
+    public MiningWorker canMine() {
+        return new MiningWorker();
+    }
 
+    /**
+     * Searches the peer store and creates connections, if empty then send a message to broker
+     * When received from broker creates connections with them
+     * Ask peers for more peers
+     * */
+    @Bean
+    public void connectionFactory() {
+        PeersConnectionFactory
+                .storages(storage, clientConnectionStorage(), brokerConnectionStorage())
+                .create();
+    }
+
+    @Bean
+    public void startBrokerConnection() {
         TcpClient.create()
-                .host("crawler-dns.default.svc.cluster.local")
+                //.host("crawler-dns.default.svc.cluster.local")
+                //.host("86.238.249.2")
+                .host("localhost")
                 .option(ChannelOption.SO_KEEPALIVE, true)
-                //.host("localhost")
                 .port(7331)
-                //.bindAddress(localAddressSupplier)
+                .doOnConnected(brokerConnectionStorage())
                 .handle(brokerTransmissionHandler())
-                .doOnConnected(requestSyncFromBroker())
+                .doOnConnected(c -> log.info("Connection to broker established!"))
                 .doOnDisconnected(c -> log.info("Connection to broker disrupted!"))
                 .connect()
                 .subscribe();
     }
 
-    @Bean
-    public Consumer<Connection> requestSyncFromBroker() {
-        return connection -> {
-            log.info("Connection to broker started!");
+//    @Bean
+//    public Consumer<Connection> requestSyncFromBroker() {
+//        return connection -> {
+//            log.info("Connection to broker started!");
+//
+//            Message syncState = new ChainStateMessage();
+//            syncState.setMessageAction(MessageActions.REQUEST_SYNC);
+//
+//            connection.outbound().sendObject(Mono
+//                            .just(Unpooled.copiedBuffer(SerializationUtils.serialize(syncState))))
+//                    .then().subscribe();
+//        };
+//    }
 
-            Message syncState = new ChainStateMessage();
-            syncState.setMessageAction(MessageActions.REQUEST_SYNC);
-
-            connection.outbound().sendObject(Mono
-                            .just(Unpooled.copiedBuffer(SerializationUtils.serialize(syncState))))
-                    .then().subscribe();
-        };
-    }
-
-    @Bean
+    //@Bean
     public void startServer() {
         TcpServer.create()
-                .host(config.getNodeServerIP())
+                //.host(config.getNodeServerIP())
                 .doOnConnection(serverConnectionStorage())
                 .doOnBound(server -> log.info("Server started on address:{} and port:{}", server.address(), config.getNodeServerIP()))
                 .doOnUnbound(server -> log.info("Server stopped!"))
-                //.port(7331)
+                .port(7331)
                 .bindNow()
                 .onDispose();
     }

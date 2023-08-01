@@ -7,9 +7,9 @@ import uk.co.roteala.net.Peer;
 public interface StorageInterface {
     StorageHandlers getStorageData();
 
-    RocksDB getPeers() throws RocksDBException;
+    RocksDB getPeers();
 
-    RocksDB getMempool();
+    StorageHandlers getMempool();
 
     RocksDB getStateTrie();
 }
