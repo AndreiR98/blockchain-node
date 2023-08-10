@@ -10,16 +10,16 @@
     </parent>
 
     <groupId>uk.co.roteala</groupId>
-    <artifactId>glacier-node</artifactId>
+    <artifactId>blockchain-node</artifactId>
     <version>${revision}</version>
-    <name>glacier-node</name>
+    <name>blockchain-node</name>
 
-    <description>glacier-node</description>
+    <description>blockchain-node</description>
 
     <properties>
         <java.version>11</java.version>
-        <revision>1.0.0-SNAPSHOT</revision>
-        <glacier.core.version>1.0.0-Spring</glacier.core.version>
+        <revision>2.0.0-SNAPSHOT</revision>
+        <glacier.core.version>2.0.0-SNAPSHOT</glacier.core.version>
         <spring.version>5.5.11</spring.version>
         <spring.boot.version>2.5.13</spring.boot.version>
         <spring.kubernetes.version>2.7.13.RELEASE</spring.kubernetes.version>

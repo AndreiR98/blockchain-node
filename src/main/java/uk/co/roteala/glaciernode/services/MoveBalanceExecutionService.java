@@ -3,6 +3,7 @@ package uk.co.roteala.glaciernode.services;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import uk.co.roteala.common.AccountModel;
+import uk.co.roteala.common.Fees;
 import uk.co.roteala.common.monetary.Coin;
 import uk.co.roteala.common.monetary.Fund;
 import uk.co.roteala.common.monetary.MoveFund;
@@ -20,25 +21,23 @@ public class MoveBalanceExecutionService implements MoveFund {
         AccountModel targetAccount = storage.getAccountByAddress(fund.getTargetAccountAddress());
 
 
-        Coin amount = fund.getAmount();
-
-        targetAccount.setNonce(targetAccount.getNonce() + 1);
-        sourceAccount.setNonce(sourceAccount.getNonce() + 1);
+        Coin amount = fund.getAmount().getRawAmount();
+        Fees fees = fund.getAmount().getFees();
+        Coin totalFees = fees.getFees().plus(fees.getNetworkFees());
 
         //if true move the actual balance
         if(fund.isProcessed()) {
-            targetAccount.setInboundAmount(targetAccount.getInboundAmount().minus(amount));
-            sourceAccount.setOutboundAmount(sourceAccount.getOutboundAmount().minus(amount));
+            targetAccount.setInboundAmount(targetAccount.getInboundAmount().plus(amount));
+            sourceAccount.setOutboundAmount(sourceAccount.getOutboundAmount().minus(amount.add(totalFees)));
 
             targetAccount.setBalance(targetAccount.getBalance().plus(amount));
-            sourceAccount.setBalance(sourceAccount.getBalance().plus(amount));
+            sourceAccount.setBalance(sourceAccount.getBalance().min(amount.add(totalFees)));
         } else {
-            //TODO: Only for nodes the fund object uses account nonce for source and target and update it here
-            targetAccount.setNonce(targetAccount.getNonce() + 1);
+            targetAccount.setNonce(targetAccount.getNonce());
             sourceAccount.setNonce(sourceAccount.getNonce() + 1);
 
             targetAccount.setInboundAmount(targetAccount.getInboundAmount().plus(amount));
-            sourceAccount.setOutboundAmount(sourceAccount.getOutboundAmount().plus(amount));
+            sourceAccount.setOutboundAmount(sourceAccount.getOutboundAmount().min(amount.add(totalFees)));
         }
 
         storage.updateAccount(targetAccount);
