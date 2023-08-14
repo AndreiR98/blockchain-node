@@ -1,61 +1,95 @@
-=====COIN BASE=====
-{
-      "coinbase": true,
-      "txid": "0000000000000000000000000000000000000000000000000000000000000000",
-      "output": 4294967295,
-      "sigscript": "0349160c21002f42696e616e63652f3333fabe6d6da721fe9f785e4dd0ee2c2d41ea95d8c91e5868b1b7645dbd566232f16318e1c70100000000000000d3ea2516a8badcd2ae2b4bb54c504c37210063de0000000000000323",
-      "sequence": 4294967295,
-      "pkscript": null,
-      "value": null,
-      "address": null,
-      "witness": [
-        "0000000000000000000000000000000000000000000000000000000000000000"
-      ]
-}
-{
-      "address": "1Q8QR5k32hexiMQnRgkJ6fmmjn5fMWhdv9",
-      "pkscript": "76a914fdb159cd21d2f3411b941ecca0cd70c51b3acc6f88ac",
-      "value": 696075270,
-      "spent": false,
-      "spender": null
-}
-===================
-    {
-      "coinbase": false,
-      "txid": "0ea5415f4a43fa6fa7c7d1bfed8a444bcc281272c6871593e1e35b58edc672cb",
-      "output": 3,
-      "sigscript": "4730440220155afea63ec755337cfff83ec34934fa523969d2d59c0d7c7d7d4114a9f689c602202a64e35229d355b23a4d1b1dc69e02cf0adcb299641561f6525a1f1dfd1f20b401210395c223fbf96e49e5b9e06a236ca7ef95b10bf18c074bd91a5942fc40360d0b68",
-      "sequence": 4294967293,
-      "pkscript": "76a914bf2646b8ba8b4a143220528bde9c306dac44a01c88ac",
-      "value": 8796594,
-      "address": "1JRhv7zRN9xCyTntYT5nuupg7JMsE7YocL",
-      "witness": []
+import java.math.BigInteger;
+import java.util.List;
+import java.util.ArrayList;
+
+public class CryptoMiner {
+
+    private boolean isMining = false;
+    private BigInteger nonce = BigInteger.ZERO;
+    private long startTime = 0;
+    private ECKey privateKey;
+
+    public CryptoMiner(String minerPrivateKey) {
+        this.privateKey = new ECKey(minerPrivateKey);
     }
- {
-      "address": null,
-      "pkscript": "6a4c5058325bb803d686445d5a2db7001355678925b859204ff073066ce03d7dc4264a5431b915793d6876a4d1aa1fbaef08faf15446922e3ea7269baebb4c04e83f348566b5000c16430084000c1283000149",
-      "value": 0,
-      "spent": false,
-      "spender": null
-    },
-    {
-      "address": "3H5PyQeV1wnxTHSVWq8gPSNeGPkULx89WU",
-      "pkscript": "a914a8c5719e4f293813161b9b22950781412b741c6387",
-      "value": 200,
-      "spent": false,
-      "spender": null
-    },
-    {
-      "address": "bc1qahlhkc4lc9pmgvxyqqgyw0nu3fgj2kauchdu7h",
-      "pkscript": "0014edff7b62bfc143b430c40010473e7c8a51255bbc",
-      "value": 200,
-      "spent": false,
-      "spender": null
-    },
-    {
-      "address": "1JRhv7zRN9xCyTntYT5nuupg7JMsE7YocL",
-      "pkscript": "76a914bf2646b8ba8b4a143220528bde9c306dac44a01c88ac",
-      "value": 8795493,
-      "spent": false,
-      "spender": null
+
+    public void startMining() throws InterruptedException {
+        while (true) {
+            if (shouldStartMining()) {
+                mineBlock();
+            } else {
+                isMining = false;
+                Thread.sleep(1000);
+            }
+
+            if (nonce.compareTo(new BigInteger("ffffffff", 16)) > 0) {
+                resetMining(); // Fix the time after reaching max nonce
+            }
+        }
     }
+
+    private boolean shouldStartMining() {
+        return worker.isBrokerConnected() &&
+               worker.isHasDataSync() &&
+               worker.isHasStateSync() &&
+               (state.isMineEmptyBlocks() || !storage.getPseudoTransactions().isEmpty());
+    }
+
+    private void mineBlock() {
+        ChainState state = storage.getStateTrie();
+        Coin reward = state.getReward();
+        Integer difficulty = state.getTarget();
+
+        if (!isMining) {
+            setupMining(); // Set startTime when mining starts
+        }
+
+        BlockMetadata newBlock;
+
+        if (state.isMineEmptyBlocks() && storage.getPseudoTransactions().isEmpty()) {
+            newBlock = generateEmptyBlock(state, reward, difficulty);
+        } else {
+            newBlock = generateBlock(state, reward, difficulty);
+        }
+
+        if (BlockchainUtils.computedTargetValue(newBlock.getBlock().getHash(), difficulty)) {
+            processMinedBlock(newBlock);
+            resetMining(); // Fix the time after mining a block
+        }
+
+        nonce = nonce.add(BigInteger.ONE);
+    }
+
+    private void setupMining() {
+        isMining = true;
+        nonce = BigInteger.ZERO;
+        startTime = System.currentTimeMillis(); // Set the start time when mining starts
+    }
+
+    private void resetMining() {
+        nonce = BigInteger.ZERO;
+        startTime = System.currentTimeMillis();
+    }
+
+    private void processMinedBlock(BlockMetadata newBlock) {
+        storage.addBlockMempool(newBlock.getBlock().getHash(), newBlock.getBlock());
+
+        MessageWrapper messageWrapper = createMessageWrapper(newBlock.getBlock().getHeader());
+
+        updateMempoolTransactions(newBlock.getMempoolTransaction());
+
+        brokerConnectionStorage.getConnection()
+            .outbound().sendObject(Mono.just(messageWrapper.serialize()))
+            .then()
+            .subscribe();
+
+        isMining = false;
+    }
+
+    // Other methods as before
+
+    public static void main(String[] args) throws InterruptedException {
+        CryptoMiner miner = new CryptoMiner(minerPrivateKey);
+        miner.startMining();
+    }
+}

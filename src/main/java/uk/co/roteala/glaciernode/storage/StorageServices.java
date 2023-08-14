@@ -97,6 +97,7 @@ public class StorageServices {
         StorageHandlers storage = storages.getMempool();
 
         try {
+            storage.getDatabase().put(storage.getHandlers().get(2), serializedKey, serializedData);
             storage.getDatabase().flush(new FlushOptions().setWaitForFlush(true),
                     storage.getHandlers().get(2));
         } catch (Exception e) {
@@ -117,10 +118,15 @@ public class StorageServices {
             serializedKey = key.getBytes();
 
             try {
+                if(storage.getDatabase().get(storage.getHandlers().get(2), serializedKey) == null) {
+                    throw new StorageException(StorageErrorCode.BLOCK_NOT_FOUND);
+                }
+
                 block = (Block) SerializationUtils.deserialize(
                         storage.getDatabase().get(storage.getHandlers().get(2), serializedKey));
+
             } catch (Exception e){
-                throw new StorageException(StorageErrorCode.BLOCK_NOT_FOUND);
+                log.error("Error:{}", e.getMessage());
             }
         }
 
@@ -168,10 +174,15 @@ public class StorageServices {
             serializedKey = key.getBytes();
 
             try {
-                transaction = (PseudoTransaction) SerializationUtils.deserialize(
-                        storage.getDatabase().get(storage.getHandlers().get(1), serializedKey));
+                byte[] serializedTransaction = storage.getDatabase().get(storage.getHandlers().get(1), serializedKey);
+
+                if(serializedTransaction != null) {
+                    //throw new TransactionException(StorageErrorCode.TRANSACTION_NOT_FOUND);
+                    transaction = (PseudoTransaction) SerializationUtils.deserialize(serializedTransaction);
+                }
+
             } catch (Exception e){
-                throw new TransactionException(StorageErrorCode.TRANSACTION_NOT_FOUND);
+                log.info("Error:{}", e.getMessage());
             }
         }
 
@@ -296,8 +307,8 @@ public class StorageServices {
                         && transaction.getStatus() != TransactionStatus.SUCCESS
                         && transaction.getTimeStamp() <= timeWindow){
 
-                    BigDecimal feesPercentage = transaction.getFees().getFees().value
-                            .divide(transaction.getValue().value, 6, RoundingMode.HALF_UP);
+                    BigDecimal feesPercentage = transaction.getFees().getFees().getValue()
+                            .divide(transaction.getValue().getValue(), 6, RoundingMode.HALF_UP);
 
                     if(feesPercentage.compareTo(new BigDecimal("1.55")) > 0) {
                         withPriority.add(transaction);
@@ -308,7 +319,7 @@ public class StorageServices {
             }
 
             //Order the non-priority by time
-            withoutPriority.sort(Comparator.comparingLong(PseudoTransaction::getTimeStamp));
+            withoutPriority.sort(Comparator.comparingLong(PseudoTransaction::getTimeStamp).reversed());
             withPriority.sort(Comparator.comparingLong(PseudoTransaction::getTimeStamp));
 
 
@@ -349,15 +360,14 @@ public class StorageServices {
             serializedKey = index.toString().getBytes();
 
             try {
-                block = (Block) SerializationUtils.deserialize(
-                        storage.getDatabase().get(storage.getHandlers().get(2), serializedKey));
+                byte[] blockSerialized = storage.getDatabase().get(storage.getHandlers().get(2), serializedKey);
 
-                if(block == null) {
-                    log.error("Failed to retrieve block:{}", index);
-                    new Exception("Failed to retrieve transaction");
+                if(blockSerialized != null) {
+                    block = SerializationUtils.deserialize(blockSerialized);
                 }
+
             } catch (Exception e){
-                new Exception("Storage failed:"+ e);
+                new StorageException(StorageErrorCode.BLOCK_NOT_FOUND);
             }
         }
 
@@ -447,13 +457,14 @@ public class StorageServices {
         RocksDB storage = storages.getStateTrie();
 
         try {
-            state = (NodeState) SerializationUtils.deserialize(storage.get(key));
-
-            if(state == null) {
+            if(storage.get(key) == null) {
                 throw new StorageException(StorageErrorCode.STATE_NOT_FOUND);
             }
+
+            state = (NodeState) SerializationUtils.deserialize(storage.get(key));
+
         } catch (StorageException | RocksDBException e){
-            throw new StorageException(StorageErrorCode.STORAGE_FAILED, "nodeState");
+            log.error("Nodestate error:{}", e.getMessage());
         }
 
         return state;
@@ -465,10 +476,8 @@ public class StorageServices {
         RocksDB storage = storages.getStateTrie();
 
         try {
-            if(storage.get(key) == null) {
                 storage.put(key, SerializationUtils.serialize(state));
                 storage.flush(new FlushOptions().setWaitForFlush(true));
-            }
         } catch (Exception e){
             throw new StorageException(StorageErrorCode.STORAGE_FAILED);
         }
@@ -480,10 +489,8 @@ public class StorageServices {
         RocksDB storage = storages.getStateTrie();
 
         try {
-            if(storage.get(key) == null) {
                 storage.put(key, SerializationUtils.serialize(state));
                 storage.flush(new FlushOptions().setWaitForFlush(true));
-            }
         } catch (Exception e){
             throw new StorageException(StorageErrorCode.STORAGE_FAILED);
         }

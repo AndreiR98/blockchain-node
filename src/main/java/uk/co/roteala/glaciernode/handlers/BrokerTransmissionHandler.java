@@ -27,6 +27,6 @@ public class BrokerTransmissionHandler implements BiFunction<NettyInbound, Netty
 
         brokerMessageProcessor.forwardMessage(inbound, outbound);
 
-        return Flux.never();
+        return outbound.neverComplete();
     }
 }

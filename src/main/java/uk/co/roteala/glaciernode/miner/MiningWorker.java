@@ -14,8 +14,6 @@ import org.springframework.stereotype.Component;
 @Slf4j
 @Data
 public class MiningWorker {
-    private boolean hasStateSync = false;//Set true when received synchronized statechain
-    private boolean hasDataSync = false;//set true when all the statechain is downloaded
     /**
      * If the node is not acting as a server for others then it won't directly broadcast to them
      * instead it will broadcast to parents and parents will broadcast to others
@@ -61,4 +59,14 @@ public class MiningWorker {
     //private boolean hasConnections = false;
     private boolean hasMempoolData = false;//set if there are any mempool data
     private boolean brokerConnected = false;//set if the connection with broker is still on
+    private boolean hasStateSync = false;//Set true when received synchronized statechain
+    private boolean hasDataSync = false;//set true when all the statechain is downloaded
+    private boolean hasParents = false;
+    private boolean hasChildren = false;
+    private boolean isMining;
+    private int miningIndex = 1;
+    private volatile boolean pauseMining = false;
+
+
+
 }
