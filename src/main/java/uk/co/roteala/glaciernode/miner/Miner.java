@@ -68,12 +68,6 @@ public class Miner implements Mining {
     private long startTime = 0;
     private ECKey privateKey;
 
-
-    @PreDestroy
-    public void shutdownThreadPool() {
-        threadPool.shutdown();
-    }
-
     @Override
     public void start() {
         this.isMining = true;
@@ -93,8 +87,16 @@ public class Miner implements Mining {
             while(true) {
                 if(shouldStartMining()) {
                     if (!this.miningWorker.isPauseMining()) { // Check if mining is not paused
-                        mineBlock();
-                        //threadPool.submit(this::mineBlock);
+                        if(!this.isMining) {
+                            setupMining();
+                        }
+
+                        List<PseudoTransaction> availableTransactions = storage
+                                .getPseudoTransactionGrouped(this.startTime);
+
+                        ChainState state = storage.getStateTrie();
+
+                        mineBlock(availableTransactions, state);
                     }
                 } else {
                     this.isMining = false;
@@ -130,35 +132,32 @@ public class Miner implements Mining {
         return false;
     }
 
-    private void mineBlock() {
-        ChainState state = storage.getStateTrie();
+    private void mineBlock(List<PseudoTransaction> availablePseudoTransaction, ChainState state) {
+
         Coin reward = state.getReward();
         Integer difficulty = state.getTarget();
 
         Block prevBlock = (state.getLastBlockIndex()) <= 0 ? state.getGenesisBlock()
                 : storage.getBlockByIndex(state.getLastBlockIndex());
 
-        if(!this.isMining) {
-            setupMining();
-        }
-
-        List<PseudoTransaction> availablePseudoTransaction = storage
-                .getPseudoTransactionGrouped(this.startTime);
 
         BlockMetadata newBlock;
 
         if(state.isAllowEmptyMining()
                 && availablePseudoTransaction.isEmpty()) {
             newBlock = generateEmptyBlock(reward, difficulty, prevBlock.getHash(), prevBlock.getHeader().getIndex());
-        } else if(!availablePseudoTransaction.isEmpty()) {
+        } else if(!state.isAllowEmptyMining() && !availablePseudoTransaction.isEmpty()) {
             newBlock = generateBlock(reward, difficulty, prevBlock.getHash(), prevBlock.getHeader().getIndex(), availablePseudoTransaction);
         } else {
             newBlock = null;
         }
 
+        log.info("New block:{}", newBlock);
+
         if(newBlock != null && (BlockchainUtils.computedTargetValue(newBlock.getBlock().getHash(), difficulty))) {
                 this.miningWorker.setPauseMining(true);
                 processMinedBlock(newBlock);
+                log.info("Block:{}", newBlock);
                 log.info("====== STOP MINING =====");
                 resetMining();
 
@@ -196,17 +195,16 @@ public class Miner implements Mining {
         blockHeader.setMinerAddress(this.privateKey.getPublicKey().toAddress());
         blockHeader.setDifficulty(target);
         blockHeader.setNonce(this.nonce.toString(16));
-        blockHeader.setNumberOfTransactions(0);
+
         blockHeader.setPreviousHash(previousHash);
         blockHeader.setVersion(0x16);
         blockHeader.setIndex(blockIndex);
         blockHeader.setTimeStamp(this.startTime);
         blockHeader.setBlockTime(System.currentTimeMillis());
 
-
-
+        int transactionIndex = 0;
         for(PseudoTransaction pseudoTransaction : pseudoTransactions) {
-            int transactionIndex = 0;
+
 
             Transaction transaction = BlockchainUtils
                     .mapPsuedoTransactionToTransaction(pseudoTransaction, blockHeader, transactionIndex);
@@ -214,8 +212,14 @@ public class Miner implements Mining {
             pseudoHashes.add(pseudoTransaction.getPseudoHash());
             transactionHashes.add(transaction.getHash());
 
+            log.info("Transaction:{}", transaction);
+
             transactionIndex++;
         }
+
+        blockHeader.setNumberOfTransactions(transactionHashes.size());
+
+        log.info("TX:{}", transactionHashes);
 
         String markleRoot = BlockchainUtils.markleRootGenerator(transactionHashes);
 
@@ -272,15 +276,6 @@ public class Miner implements Mining {
      * */
     private void processMinedBlock(BlockMetadata newBlock) {
         try {
-            //Process transactional block
-//            if(newBlock.getTransactionHashes().isEmpty()
-//                    && newBlock.getMempoolTransaction().isEmpty()
-//                    && Objects.equals(newBlock.getBlock()
-//                    .getHeader().getMarkleRoot(), "0000000000000000000000000000000000000000000000000000000000000000")) {
-//                //
-//            } else {
-//
-//            }
             this.miningWorker.setPauseMining(true);
 
             MessageWrapper blockHeaderWrapper = new MessageWrapper();

@@ -92,69 +92,6 @@ public class BrokerMessageProcessor implements Processor {
                 .subscribe();
     }
 
-    private static Message mapperToMessage(ByteBuf byteBuf) {
-        byte[] bytes = new byte[byteBuf.readableBytes()];
-        byteBuf.readBytes(bytes);
-
-        String messageWrapperString = SerializationUtils.deserialize(bytes);
-        ReferenceCountUtil.release(byteBuf);
-
-        MessageTemplate.MessageTemplateBuilder templateBuilder = MessageTemplate.builder();
-
-        try {
-
-            ObjectMapper objectMapper = new ObjectMapper();
-            MessageWrapper messageWrapper = objectMapper.readValue(messageWrapperString, MessageWrapper.class);
-
-            templateBuilder
-                    .verified(messageWrapper.isVerified())
-                    .messageAction(messageWrapper.getAction());
-
-            switch (messageWrapper.getType()) {
-                case PEERS:
-                    templateBuilder
-                            .content(messageWrapper.getContent())
-                            .type(MessageTypes.PEERS);
-                    break;
-                case BLOCK:
-                    templateBuilder
-                            .content(messageWrapper.getContent())
-                            .type(MessageTypes.BLOCK);
-                    break;
-                case BLOCKHEADER:
-                    templateBuilder
-                            .content(messageWrapper.getContent())
-                            .type(MessageTypes.BLOCKHEADER);
-                    break;
-                case ACCOUNT:
-                    templateBuilder
-                            .content(messageWrapper.getContent())
-                            .type(MessageTypes.ACCOUNT);
-                    break;
-                case MEMPOOL:
-                    templateBuilder
-                            .content(messageWrapper.getContent())
-                            .type(MessageTypes.MEMPOOL);
-                    break;
-                case STATECHAIN:
-                    templateBuilder
-                            .content(messageWrapper.getContent())
-                            .type(MessageTypes.STATECHAIN);
-                    break;
-                case TRANSACTION:
-                    templateBuilder
-                            .content(messageWrapper.getContent())
-                            .type(MessageTypes.TRANSACTION);
-                    break;
-            }
-
-            return templateBuilder.build();
-
-        } catch (Exception e) {
-            log.info("Exception:{}", e.getMessage());
-            throw new MessageSerializationException(MessageSerializationErrCode.DESERIALIZATION_FAILED);
-        }
-    }
     @Override
     public void process(Message message) {
         MessageTypes messageTypes = message.getMessageType();
@@ -250,7 +187,6 @@ public class BrokerMessageProcessor implements Processor {
                         throw new StorageException(StorageErrorCode.BLOCK_NOT_FOUND);
                     }
 
-
                     state.setLastBlockIndex(state.getLastBlockIndex() + 1);
                     nodeState.setUpdatedAt(System.currentTimeMillis());
                     nodeState.setRemainingBlocks(nodeState.getRemainingBlocks() - 1);
@@ -276,20 +212,12 @@ public class BrokerMessageProcessor implements Processor {
 
         BlockHeader blockHeader = (BlockHeader) message.getMessage();
 
-        ChainState state = storage.getStateTrie();
-        NodeState nodeState = storage.getNodeState();
+        final BlockHeaderProcessor blockHeaderProcessor =
+                new BlockHeaderProcessor(blockHeader, storage, moveFund, worker);
 
         switch (messageAction) {
             case APPEND_MINED_BLOCK:
-                createStateChainBlock(blockHeader, state, nodeState);
-                break;
-
-            case VERIFY:
-                processVerifyBlockRequest(blockHeader, state);
-                break;
-
-            case MINED_BLOCK:
-                processNewlyMinedBlock(blockHeader, state);
+                blockHeaderProcessor.processAppendBlockHeader();
                 break;
         }
     }
@@ -311,7 +239,7 @@ public class BrokerMessageProcessor implements Processor {
         MessageWrapper messageWrapper = new MessageWrapper();
 
         ChainState currentState = storage.getStateTrie();
-        NodeState nodeState = storage.getNodeState();
+        NodeState nodeState;
 
         switch (action) {
             //Response to REQUEST
@@ -343,6 +271,8 @@ public class BrokerMessageProcessor implements Processor {
 
                 //Response to REQUEST_SYNC
             case MODIFY:
+                nodeState = storage.getNodeState();
+
                 log.info("Current chain state:{}", currentState);
                 log.info("Current node state:{}", nodeState);
 

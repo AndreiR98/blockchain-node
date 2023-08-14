@@ -531,5 +531,35 @@ public class StorageServices {
 
     //public List<AccountModel> getAllAccounts() {}
 
-    public void deleteData(Message message) {}
+    public void updateStateTrie(ChainState newState) {
+        final byte[] key = "stateChain".getBytes();
+
+        RocksDB storage = storages.getStateTrie();
+
+        try {
+            if(newState == null) {
+                throw new StorageException(StorageErrorCode.STATE_NOT_FOUND);
+            }
+
+            storage.put("stateChain".getBytes(), SerializationUtils.serialize(newState));
+            storage.flush(new FlushOptions().setWaitForFlush(true));
+        } catch (Exception e){
+            log.info("Error:{}", e.getMessage());
+        }
+    }
+
+    public void updateNodeState(NodeState newNodeState) {
+        RocksDB storage = storages.getStateTrie();
+
+        try {
+            if(newNodeState == null) {
+                throw new StorageException(StorageErrorCode.STATE_NOT_FOUND);
+            }
+
+            storage.put("nodeState".getBytes(), SerializationUtils.serialize(newNodeState));
+            storage.flush(new FlushOptions().setWaitForFlush(true));
+        } catch (Exception e){
+            log.info("Error:{}", e.getMessage());
+        }
+    }
 }

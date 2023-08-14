@@ -66,4 +66,9 @@ public class MoveBalanceExecutionService implements MoveFund {
             storage.updateAccount(initialSourceAccount);
         }
     }
+
+    @Override
+    public void executeRewardFund(Fund fund) {
+
+    }
 }
