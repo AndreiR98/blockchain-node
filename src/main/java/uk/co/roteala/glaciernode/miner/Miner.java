@@ -68,6 +68,8 @@ public class Miner implements Mining {
     private long startTime = 0;
     private ECKey privateKey;
 
+    private boolean isWorking = false;
+
     @Override
     public void start() {
         this.isMining = true;
@@ -84,27 +86,44 @@ public class Miner implements Mining {
     public void work() {
         try {
             this.privateKey =  new ECKey(minerPrivateKey);
+            //List<PseudoTransaction> groupedTransactions = new ArrayList<>();
+
             while(true) {
-                if(shouldStartMining()) {
-                    if (!this.miningWorker.isPauseMining()) { // Check if mining is not paused
-                        if(!this.isMining) {
+                boolean miningWithTransactions = false; // Flag to indicate if mining with transactions
+
+                ChainState state = storage.getStateTrie();
+
+
+
+                if (shouldStartMining()) {
+                    if (!this.miningWorker.isPauseMining()) {
+                        if (!this.isWorking) {
                             setupMining();
+                            miningWithTransactions = false;
+
+                            if(!this.storage.getPseudoTransactionGrouped(System.currentTimeMillis()).isEmpty()) {
+                                resetMining();
+                                miningWithTransactions = true;
+
+                                //groupedTransactions = this.storage.getPseudoTransactionGrouped(this.startTime);
+                            }
                         }
 
-                        List<PseudoTransaction> availableTransactions = storage
-                                .getPseudoTransactionGrouped(this.startTime);
+                        //log.info("Tx:{}", storage.getPseudoTransactionGrouped(System.currentTimeMillis()));
 
-                        ChainState state = storage.getStateTrie();
-
-                        mineBlock(availableTransactions, state);
+                        if(!this.storage.getPseudoTransactionGrouped(this.startTime).isEmpty() || (state.isAllowEmptyMining() && !miningWithTransactions)) {
+                            mineBlock(this.storage.getPseudoTransactionGrouped(this.startTime), state);
+                            miningWithTransactions = true; // Set the flag if mining with transactions
+                        }
                     }
                 } else {
-                    this.isMining = false;
+                    this.isWorking = false;
                     Thread.sleep(3000);
                 }
 
-                if (nonce.compareTo(new BigInteger("ffffffff", 16)) > 0) {
+                if (this.nonce.compareTo(new BigInteger("ffffffff", 16)) > 0) {
                     resetMining(); // Fix the time after reaching max nonce
+                    miningWithTransactions = false;
                 }
             }
         } catch (Exception e) {
@@ -121,7 +140,8 @@ public class Miner implements Mining {
         if(state != null) {
             if(state.isAllowEmptyMining()) {
                 return this.miningWorker.isBrokerConnected()
-                        && this.miningWorker.isHasStateSync();
+                        && miningWorker.isHasDataSync()
+                        && miningWorker.isHasStateSync();
             }
 
             return miningWorker.isBrokerConnected()
@@ -133,6 +153,10 @@ public class Miner implements Mining {
     }
 
     private void mineBlock(List<PseudoTransaction> availablePseudoTransaction, ChainState state) {
+
+        this.isWorking = true;
+
+        lockTransactions(availablePseudoTransaction);
 
         Coin reward = state.getReward();
         Integer difficulty = state.getTarget();
@@ -152,7 +176,9 @@ public class Miner implements Mining {
             newBlock = null;
         }
 
-        log.info("New block:{}", newBlock);
+        log.info("Hash:{}", newBlock);
+
+
 
         if(newBlock != null && (BlockchainUtils.computedTargetValue(newBlock.getBlock().getHash(), difficulty))) {
                 this.miningWorker.setPauseMining(true);
@@ -212,14 +238,10 @@ public class Miner implements Mining {
             pseudoHashes.add(pseudoTransaction.getPseudoHash());
             transactionHashes.add(transaction.getHash());
 
-            log.info("Transaction:{}", transaction);
-
             transactionIndex++;
         }
 
         blockHeader.setNumberOfTransactions(transactionHashes.size());
-
-        log.info("TX:{}", transactionHashes);
 
         String markleRoot = BlockchainUtils.markleRootGenerator(transactionHashes);
 
@@ -242,6 +264,7 @@ public class Miner implements Mining {
      * Generate block containing transactions
      * */
     private BlockMetadata generateEmptyBlock(Coin reward, Integer target, String previousHash, Integer index) {
+
         BlockHeader blockHeader = new BlockHeader();
         blockHeader.setReward(reward);
         blockHeader.setMinerAddress(this.privateKey.getPublicKey().toAddress());
@@ -315,6 +338,18 @@ public class Miner implements Mining {
             }
         } catch (Exception e) {
             log.error("Error on processing block:{}", e.getMessage());
+        }
+    }
+
+    private void lockTransactions(List<PseudoTransaction> pseudoTransactions) {
+        try {
+            for(PseudoTransaction pseudoTransaction : pseudoTransactions) {
+                pseudoTransaction.setStatus(TransactionStatus.LOCKED);
+
+                this.storage.addMempool(pseudoTransaction.getPseudoHash(), pseudoTransaction);
+            }
+        } catch (Exception e) {
+            log.error("Error while locking transactions:{}",e.toString());
         }
     }
 

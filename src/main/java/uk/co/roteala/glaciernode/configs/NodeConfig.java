@@ -17,14 +17,19 @@ import uk.co.roteala.common.events.MessageActions;
 import uk.co.roteala.common.monetary.MoveFund;
 import uk.co.roteala.glaciernode.handlers.BrokerTransmissionHandler;
 import uk.co.roteala.glaciernode.handlers.ClientTransmissionHandler;
+import uk.co.roteala.glaciernode.handlers.ServerTransmissionHandler;
 import uk.co.roteala.glaciernode.miner.MiningWorker;
 import uk.co.roteala.glaciernode.p2p.*;
 import uk.co.roteala.glaciernode.processor.BrokerMessageProcessor;
 import uk.co.roteala.glaciernode.processor.ClientMessageProcessor;
+import uk.co.roteala.glaciernode.processor.ServerMessageProcessor;
 import uk.co.roteala.glaciernode.services.MoveBalanceExecutionService;
 import uk.co.roteala.glaciernode.storage.StorageServices;
 
+import java.net.InetSocketAddress;
+import java.net.SocketAddress;
 import java.util.function.Consumer;
+import java.util.function.Supplier;
 
 @Slf4j
 @Configuration
@@ -39,13 +44,19 @@ public class NodeConfig {
         return new MiningWorker();
     }
 
+    @Bean
+    public Supplier<SocketAddress> addressSupplier() {
+        return () -> new InetSocketAddress(config.getNodeServerIP(), 0);
+    }
+
 
     @Bean
     public void startBrokerConnection() {
         TcpClient.create()
                 //.host("crawler-dns.default.svc.cluster.local")
+                //.host("3.8.20.9")
+                //.bindAddress(addressSupplier())
                 .host("localhost")
-                //.host("3.10.119.127")
                 .option(ChannelOption.SO_KEEPALIVE, true)
                 .port(7331)
                 .wiretap(true)
@@ -59,11 +70,22 @@ public class NodeConfig {
                 .subscribe();
     }
 
+    //@Bean
+    public void startServer() {
+        TcpServer.create()
+                .port(7331)
+                .host(config.getNodeServerIP())
+                //.doOnConnection(serverTransmissionHandler())
+                .handle(serverTransmissionHandler())
+                .wiretap(true)
+                .bindNow();
+    }
+
 
 
     @Bean
     public PeersConnectionFactory connectionFactory() {
-        return new PeersConnectionFactory(storage);
+        return new PeersConnectionFactory();
     }
 
     /**
@@ -74,8 +96,15 @@ public class NodeConfig {
         return new ServerConnectionStorage();
     }
 
+    @Bean
+    public ServerTransmissionHandler serverTransmissionHandler() {
+        return new ServerTransmissionHandler(serverMessageProcessor());
+    }
 
-
+    @Bean
+    public ServerMessageProcessor serverMessageProcessor() {
+        return new ServerMessageProcessor();
+    }
     /**
      * Keeps track of servers connections
      * */

@@ -10,11 +10,11 @@ import uk.co.roteala.common.BlockHeader;
 import uk.co.roteala.common.events.Message;
 import uk.co.roteala.common.events.MessageActions;
 import uk.co.roteala.common.events.MessageTypes;
-import uk.co.roteala.common.monetary.MoveFund;
 import uk.co.roteala.glaciernode.miner.MiningWorker;
 import uk.co.roteala.glaciernode.p2p.BrokerConnectionStorage;
 import uk.co.roteala.glaciernode.p2p.ClientConnectionStorage;
 import uk.co.roteala.glaciernode.p2p.ServerConnectionStorage;
+import uk.co.roteala.glaciernode.processor.client.ClientBlockHeaderProcessor;
 import uk.co.roteala.glaciernode.storage.StorageServices;
 
 import java.time.Duration;
@@ -84,10 +84,10 @@ public class ClientMessageProcessor implements Processor {
                 processBlockHeader(message);
                 break;
             case TRANSACTION:
-                //processTransaction(message);
+                processTransaction(message);
                 break;
             case BLOCK:
-                //processBlock(message);
+                processBlock(message);
                 break;
         }
     }
@@ -105,9 +105,10 @@ public class ClientMessageProcessor implements Processor {
             case VERIFY:
                 blockHeaderProcessor.verifyNewBlock();
                 break;
-            case REQUEST_SYNC:
-                //blockHeaderProcessor.syncWithNewHeader();
-                break;
         }
     }
+
+    private void processTransaction(Message message) {}
+
+    private void processBlock(Message message) {}
 }

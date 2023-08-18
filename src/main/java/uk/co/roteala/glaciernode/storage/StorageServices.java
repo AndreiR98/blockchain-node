@@ -204,6 +204,21 @@ public class StorageServices {
         }
     }
 
+    public void deleteMempoolBlock(String hash) {
+        final byte[] key = hash.getBytes();
+
+        RocksDB.loadLibrary();
+
+        StorageHandlers storage = storages.getMempool();
+
+        try {
+            storage.getDatabase()
+                    .delete(storage.getHandlers().get(2), key);
+        } catch (Exception e) {
+            log.error("Error while deleting block:{}", e.getMessage());
+        }
+    }
+
     public List<Block> getPseudoBlocks() {
         List<Block> pseudoBlocks = new ArrayList<>();
 
@@ -221,7 +236,7 @@ public class StorageServices {
                 }
             }
         } catch (Exception e) {
-            throw new RuntimeException(e);
+            log.error("Error fetching block from store");
         }
 
         return pseudoBlocks;
@@ -244,31 +259,8 @@ public class StorageServices {
                 storage.getDatabase().delete(storage.getHandlers().get(2), serializedKey);
             }
         } catch (Exception e) {
-            throw new StorageException(StorageErrorCode.STORAGE_FAILED);
+           log.error("Faield to delete mempool blocks!");
         }
-    }
-
-    public List<PseudoTransaction> getPseudoTransactions() {
-        List<PseudoTransaction> pseudoTransactions = new ArrayList<>();
-
-        try {
-            StorageHandlers handlers = storages.getMempool();
-
-            RocksIterator iterator = handlers.getDatabase()
-                    .newIterator(handlers.getHandlers().get(1));
-
-            for(iterator.seekToFirst(); iterator.isValid(); iterator.next()) {
-                PseudoTransaction transaction = SerializationUtils.deserialize(iterator.value());
-
-                if((transaction != null) && transaction.getStatus() != TransactionStatus.PROCESSED) {
-                    pseudoTransactions.add(transaction);
-                }
-            }
-        } catch (Exception e) {
-            throw new RuntimeException(e);
-        }
-
-        return pseudoTransactions;
     }
 
     /**
@@ -305,6 +297,7 @@ public class StorageServices {
                 if((transaction != null)
                         && transaction.getStatus() != TransactionStatus.PROCESSED
                         && transaction.getStatus() != TransactionStatus.SUCCESS
+                        //&& transaction.getStatus() != TransactionStatus.LOCKED
                         && transaction.getTimeStamp() <= timeWindow){
 
                     BigDecimal feesPercentage = transaction.getFees().getFees().getValue()
@@ -320,7 +313,7 @@ public class StorageServices {
 
             //Order the non-priority by time
             withoutPriority.sort(Comparator.comparingLong(PseudoTransaction::getTimeStamp).reversed());
-            withPriority.sort(Comparator.comparingLong(PseudoTransaction::getTimeStamp));
+            withPriority.sort(Comparator.comparing(t -> t.getFees().getFees().getValue()));//Compare them by fees in ascending order
 
 
             //Add all priority transactions first
@@ -328,19 +321,25 @@ public class StorageServices {
 
             int transactionBytesSize = SerializationUtils.serialize((Serializable) returnTransactions).length;
 
-            int index = 0;
-            while (index < withoutPriority.size() && transactionBytesSize < maxSize) {
-                PseudoTransaction transaction = withoutPriority.get(index);
-                returnTransactions.add(transaction);
+            if(!withoutPriority.isEmpty()) {
+                int index = 0;
+                while ((transactionBytesSize < maxSize) || index < withoutPriority.size()){
+                    PseudoTransaction transaction = withoutPriority.get(index);
 
-                // Update transactionBytesSize with the size of the newly added transaction
-                transactionBytesSize += SerializationUtils.serialize((Serializable) transaction).length;
+                    returnTransactions.add(transaction);
 
-                index++;
+                    // Update transactionBytesSize with the size of the newly added transaction
+                    transactionBytesSize += SerializationUtils.serialize((Serializable) transaction).length;
+
+                    if((index+1) >= withoutPriority.size()) {
+                        break;
+                    }
+
+                    index++;
+                }
             }
         } catch (Exception e) {
-            log.info("Eror:{}", e.getMessage());
-            //throw new StorageException(StorageErrorCode.MEMPOOL_NOT_FOUND);
+            log.info("Error:{}", e.getMessage());
         }
 
         //Return 1MB list of transactions
@@ -360,14 +359,11 @@ public class StorageServices {
             serializedKey = index.toString().getBytes();
 
             try {
-                byte[] blockSerialized = storage.getDatabase().get(storage.getHandlers().get(2), serializedKey);
-
-                if(blockSerialized != null) {
-                    block = SerializationUtils.deserialize(blockSerialized);
+                if(storage.getDatabase().get(storage.getHandlers().get(2), serializedKey) != null) {
+                    block = SerializationUtils.deserialize(storage.getDatabase().get(storage.getHandlers().get(2), serializedKey));
                 }
-
             } catch (Exception e){
-                new StorageException(StorageErrorCode.BLOCK_NOT_FOUND);
+                log.error("Block not found!");
             }
         }
 
@@ -380,15 +376,6 @@ public class StorageServices {
 
         try {
             RocksDB storage = storages.getPeers();
-
-            if(serializedKey == null) {
-                log.error("Failed to add, key:{}", peer.getAddress());
-            }
-
-            if(serializedPeer == null) {
-                log.error("Failed to add, peer:{}", peer);
-                new RocksDBException("Failed due to peer issue");
-            }
 
             storage.put(serializedKey, serializedPeer);
             storage.flush(new FlushOptions().setWaitForFlush(true));

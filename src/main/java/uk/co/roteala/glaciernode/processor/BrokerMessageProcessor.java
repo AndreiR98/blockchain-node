@@ -90,6 +90,8 @@ public class BrokerMessageProcessor implements Processor {
                 })
                 .then()
                 .subscribe();
+
+        log.info("Worker:{}", this.worker);
     }
 
     @Override
@@ -105,7 +107,7 @@ public class BrokerMessageProcessor implements Processor {
                 processMessageStateChain(message);
                 break;
             case ACCOUNT:
-                processMessageAccount(message);
+                //processMessageAccount(message);
                 break;
             case PEERS:
                 processMessagePeers(message);
@@ -146,7 +148,7 @@ public class BrokerMessageProcessor implements Processor {
                     AccountModel sourceAccount = storage.getAccountByAddress(transaction.getFrom());
 
                     storage.addTransaction(transaction.getHash(), transaction);
-                    //log.info("New transaction added:{}", transaction);
+
 
                     Fund fund = Fund.builder()
                             .targetAccountAddress(transaction.getTo())
@@ -158,7 +160,7 @@ public class BrokerMessageProcessor implements Processor {
                                     .build())
                             .build();
 
-                    moveFund.execute(fund);
+                    moveFund.reverseFunding(fund);
                 } catch (Exception e) {
                     log.error("Error:{}", e.getMessage());
                 }
@@ -175,7 +177,7 @@ public class BrokerMessageProcessor implements Processor {
 
         NodeState nodeState = storage.getNodeState();
 
-        //TODO:Change exception
+
         switch (messageAction) {
             case APPEND:
                 try {
@@ -183,13 +185,13 @@ public class BrokerMessageProcessor implements Processor {
                         throw new MiningException(MiningErrorCode.BLOCK_NOT_FOUND);
                     }
 
-                    if(storage.getBlockByIndex(block.getHeader().getIndex()) != null) {
-                        throw new StorageException(StorageErrorCode.BLOCK_NOT_FOUND);
-                    }
-
                     state.setLastBlockIndex(state.getLastBlockIndex() + 1);
                     nodeState.setUpdatedAt(System.currentTimeMillis());
                     nodeState.setRemainingBlocks(nodeState.getRemainingBlocks() - 1);
+
+                    if(nodeState.getRemainingBlocks() == 0) {
+                        this.worker.setHasDataSync(true);
+                    }
 
                     storage.addNodeState(nodeState);
                     log.info("Updated node state:{}", nodeState);
@@ -213,21 +215,17 @@ public class BrokerMessageProcessor implements Processor {
         BlockHeader blockHeader = (BlockHeader) message.getMessage();
 
         final BlockHeaderProcessor blockHeaderProcessor =
-                new BlockHeaderProcessor(blockHeader, storage, moveFund, worker);
+                new BlockHeaderProcessor(blockHeader, storage, moveFund, worker, connection);
 
         switch (messageAction) {
             case APPEND_MINED_BLOCK:
                 blockHeaderProcessor.processAppendBlockHeader();
                 break;
-        }
-    }
-
-    private void processMessageAccount(Message message) {
-        MessageActions action = message.getMessageAction();
-
-        switch (action) {
-            case APPEND:
-                storage.updateAccount((AccountModel) message.getMessage());
+            case DISCARD:
+                blockHeaderProcessor.processDiscardBlock();
+                break;
+            case VERIFY:
+                blockHeaderProcessor.processVerify();
                 break;
         }
     }
@@ -236,87 +234,20 @@ public class BrokerMessageProcessor implements Processor {
         MessageActions action = message.getMessageAction();
         ChainState state = (ChainState) message.getMessage();
 
-        MessageWrapper messageWrapper = new MessageWrapper();
-
-        ChainState currentState = storage.getStateTrie();
-        NodeState nodeState;
+        final StateChainProcessor stateChainProcessor =
+                new StateChainProcessor(clientConnectionStorage, storage, peersConnectionFactory, worker, state, connection);
 
         switch (action) {
-            //Response to REQUEST
             case APPEND:
-                storage.addStateTrie(state);
-
-                worker.setHasStateSync(true);
-
-                nodeState = new NodeState();
-                nodeState.setRemainingBlocks(state.getLastBlockIndex());
-                nodeState.setUpdatedAt(System.currentTimeMillis());
-                nodeState.setLastBlockIndex(0);
-
-                storage.addNodeState(nodeState);
-
-                if(state.getLastBlockIndex() == 0) {
-                    worker.setHasDataSync(true);
-                }
-                //Ask for peers
-                messageWrapper.setAction(MessageActions.REQUEST);
-                messageWrapper.setType(MessageTypes.PEERS);
-
-                this.outbound.sendObject(Mono.just(messageWrapper.serialize()))
-                        .then().subscribe();
-
-                log.info("State:{} chain added!", state);
-
+                stateChainProcessor.processAppend();
                 break;
-
-                //Response to REQUEST_SYNC
             case MODIFY:
-                nodeState = storage.getNodeState();
-
-                log.info("Current chain state:{}", currentState);
-                log.info("Current node state:{}", nodeState);
-
-                //Compute the remaining blocks
-                final Integer remainingBlocks = currentState.getLastBlockIndex() - nodeState.getLastBlockIndex();
-
-                if(remainingBlocks == 0) {
-                    worker.setHasDataSync(true);
-                } else {
-                    messageWrapper.setType(MessageTypes.NODESTATE);
-                    messageWrapper.setAction(MessageActions.REQUEST_SYNC);
-                    messageWrapper.setContent(nodeState);
-
-                    this.outbound.sendObject(Mono.just(messageWrapper.serialize()))
-                            .then().subscribe();
-                }
-
-                nodeState.setRemainingBlocks(remainingBlocks);
-                nodeState.setUpdatedAt(System.currentTimeMillis());
-
-                storage.addNodeState(nodeState);
-
-
-                //Check if peers
-                if(storage.getPeersFromStorage().isEmpty()) {
-                    messageWrapper.setAction(MessageActions.REQUEST);
-                    messageWrapper.setType(MessageTypes.PEERS);
-
-                    this.outbound.sendObject(Mono.just(messageWrapper.serialize()))
-                            .then().subscribe();
-                } else {
-                    this.peersConnectionFactory.createConnections(message);
-                }
-
-                storage.addStateTrie(state);
-                worker.setHasStateSync(true);
-
-                log.info("State:{} and node chain:{} modified!", state, nodeState);
+                stateChainProcessor.processModify();
                 break;
         }
     }
 
     private void processMessageMempool(Message message) {
-        //MessageActions action = message.getMessageAction();
         MessageActions action = MessageActions.APPEND;
 
         switch (action) {
@@ -357,34 +288,29 @@ public class BrokerMessageProcessor implements Processor {
 
         NodeState nodeState = storage.getNodeState();
 
-        switch (action) {
-            /**
-             * Response to REQUEST
-             * Create connections from list of IPs
-             * */
-            case NO_CONNECTIONS:
-                MessageWrapper messageWrapper = new MessageWrapper();
-                messageWrapper.setType(MessageTypes.NODESTATE);
-                messageWrapper.setAction(MessageActions.REQUEST_SYNC);
-                messageWrapper.setContent(nodeState);
+        final PeersMessageProcessor peersMessageProcessor =
+                new PeersMessageProcessor(storage, worker, connection);
 
-                this.outbound.sendObject(Mono.just(messageWrapper.serialize()))
-                        .then().subscribe();
+        switch (action) {
+            case REQUEST_SYNC:
+               if(!container.getPeersList().isEmpty()) {
+                   for(String ip : container.getPeersList()) {
+                       Peer peer = new Peer();
+                       peer.setActive(true);
+                       peer.setAddress(ip);
+                       peer.setPort(7331);
+                       peer.setLastTimeSeen(System.currentTimeMillis());
+
+                       this.storage.addPeer(peer);
+
+                       this.peersConnectionFactory.createConnection(peer);
+                   }
+               }
+                break;
+            case NO_CONNECTIONS:
+                peersMessageProcessor.processNoConnections();
                 break;
         }
     }
-
-
-    private void processVerifyBlockRequest(BlockHeader blockHeader, ChainState state) {
-        try {
-
-        } catch (Exception e) {
-            log.error("Error while processing verify request:{}", e.getMessage());
-        }
-    }
-
-
-
-    //TODO:Add try and catch
 
 }

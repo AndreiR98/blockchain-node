@@ -18,6 +18,8 @@ public class GlacierConfigs {
 
     private static final String ROOT_WINDOWS = System.getenv("APPDATA");
 
+    //private static final String ROOT_WINDOWS = System.getProperty("user.home");
+
     private String rootWindows = ROOT_WINDOWS;
 
     private static final String LOGS = "/logs";
