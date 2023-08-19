@@ -62,7 +62,7 @@ public class BlockHeaderProcessor {
             if(memBlock == null) {
                 MessageWrapper messageWrapper = new MessageWrapper();
                 messageWrapper.setAction(MessageActions.REQUEST);
-                messageWrapper.setType(MessageTypes.BLOCK);
+                messageWrapper.setType(MessageTypes.BLOCKHEADER);
                 messageWrapper.setVerified(true);
                 messageWrapper.setContent(this.blockHeader);
 
@@ -165,6 +165,9 @@ public class BlockHeaderProcessor {
             updateMempoolTransactions(memBlock.getTransactions(), TransactionStatus.VALIDATED);
 
             this.storage.deleteMempoolBlock(this.blockHeader.getHash());
+            log.info("Discarded success!");
+
+            this.worker.setPauseMining(false);
         } catch (Exception e) {
             log.error("Error while discarding block:{}", e.getMessage());
         }

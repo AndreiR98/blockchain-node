@@ -35,29 +35,33 @@ public class PeersConnectionFactory {
      */
 
     public Mono<? extends Connection> createConnection(Peer peer) {
+        log.info("Trying to connect with:{}", peer.getAddress());
+
         return TcpClient.create()
                 .host(peer.getAddress())
                 .port(7331)
                 .bindAddress(addressSupplier)
-                .doOnConnected(c -> log.info("Peer connected!"))
+                .doOnConnected(clientConnectionStorage)
                 .handle(clientTransmissionHandler)
                 .doOnDisconnected(connection -> {
+                    log.info("Peer disconnected!");
+                    // Remove the connection from the storage
+                    clientConnectionStorage.accept(connection);
                     clientConnectionStorage.getClientConnections().remove(connection);
-
                     peer.setActive(false);
                     peer.setLastTimeSeen(System.currentTimeMillis());
                     this.storage.addPeer(peer);
                 })
                 .connect()
                 .doOnSuccess(connection -> {
-                    clientConnectionStorage.getClientConnections().add(connection);
-                    peer.setActive(true);
-                    //peer.setLastTimeSeen(System.currentTimeMillis());
-                    this.storage.addPeer(peer);
+                    log.info("Peer connection succeeded!");
                 })
                 .doOnError(throwable -> {
-                    log.error("Failed to connect....", throwable.getMessage());
+                    log.error("Failed to connect: " + throwable.getMessage());
                 })
-                .onErrorResume(throwable -> Mono.empty());
+                .onErrorResume(throwable -> {
+                    log.error("Connection error: " + throwable.getMessage());
+                    return Mono.empty();
+                });
     }
 }

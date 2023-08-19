@@ -87,11 +87,11 @@ public class StateChainProcessor {
             ChainState localChainState = this.storage.getStateTrie();
             NodeState nodeState = this.storage.getNodeState();
 
-            int remainingBlocks = this.currentState.getLastBlockIndex() - localChainState.getLastBlockIndex();
+            int remainingBlocks = this.currentState.getLastBlockIndex() - nodeState.getLastBlockIndex();
 
             nodeState.setUpdatedAt(System.currentTimeMillis());
             nodeState.setRemainingBlocks(remainingBlocks);
-            nodeState.setLastBlockIndex(localChainState.getLastBlockIndex());
+            //nodeState.setLastBlockIndex(localChainState.getLastBlockIndex());
 
             this.worker.setHasStateSync(true);
 
@@ -115,6 +115,11 @@ public class StateChainProcessor {
         }
     }
 
+
+    /**
+     * Fully sync the node
+     * */
+
     /**
      * Execute peers connections as soon as we have connections inside the storage
      * If no connections available then we request from broker and process them in a different way
@@ -126,24 +131,30 @@ public class StateChainProcessor {
              * */
             if(!this.storage.getPeersFromStorage().isEmpty()) {
                 Flux.fromIterable(this.storage.getPeersFromStorage())
-                        .doOnNext(peer -> {
+                        .concatMap(peer -> {
                             log.info("===== CONNECTION FACTORY =====");
-                            this.peersConnectionFactory.createConnection(peer);
+                            return this.peersConnectionFactory.createConnection(peer)
+                                    .then(Mono.just(peer))
+                                    .delayElement(Duration.ofMillis(1000));
                         })
                         .doOnComplete(() -> {
                             /**
                              * Count how many success connections we achieved
                              * */
-                            int numberOfConnections = this.clientConnectionStorage.getClientConnections().size();
+                            int numberOfConnections = 0;
+                            if(this.clientConnectionStorage.getClientConnections() != null){
+                                numberOfConnections = this.clientConnectionStorage.getClientConnections().size();
+                            }
                             if(numberOfConnections > 0) {
                                 //execute partitioner
-                                partitioner();
+                                //partitioner();
+                                this.worker.setHasParents(true);
                             } else {
                                 MessageWrapper peersRequest = new MessageWrapper();
                                 peersRequest.setVerified(true);
                                 peersRequest.setType(MessageTypes.PEERS);
                                 peersRequest.setContent(nodeState);//Send node state
-                                peersRequest.setAction(MessageActions.NO_CONNECTIONS);
+                                peersRequest.setAction(MessageActions.EMPTY_PEERS);
 
                                 log.info("No connections available request peers from broker!");
                                 this.brokerConnection.outbound()
@@ -158,7 +169,7 @@ public class StateChainProcessor {
                 peersRequest.setVerified(true);
                 peersRequest.setType(MessageTypes.PEERS);
                 peersRequest.setContent(nodeState);//Send node state
-                peersRequest.setAction(MessageActions.NO_CONNECTIONS);
+                peersRequest.setAction(MessageActions.EMPTY_PEERS);
 
                 log.info("No connections available request peers from broker!");
                 this.brokerConnection.outbound()

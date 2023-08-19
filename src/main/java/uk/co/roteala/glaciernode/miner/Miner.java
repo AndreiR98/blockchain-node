@@ -92,9 +92,6 @@ public class Miner implements Mining {
                 boolean miningWithTransactions = false; // Flag to indicate if mining with transactions
 
                 ChainState state = storage.getStateTrie();
-
-
-
                 if (shouldStartMining()) {
                     if (!this.miningWorker.isPauseMining()) {
                         if (!this.isWorking) {
@@ -109,7 +106,6 @@ public class Miner implements Mining {
                             }
                         }
 
-                        //log.info("Tx:{}", storage.getPseudoTransactionGrouped(System.currentTimeMillis()));
 
                         if(!this.storage.getPseudoTransactionGrouped(this.startTime).isEmpty() || (state.isAllowEmptyMining() && !miningWithTransactions)) {
                             mineBlock(this.storage.getPseudoTransactionGrouped(this.startTime), state);
@@ -141,11 +137,13 @@ public class Miner implements Mining {
             if(state.isAllowEmptyMining()) {
                 return this.miningWorker.isBrokerConnected()
                         && miningWorker.isHasDataSync()
+                        //&& miningWorker.isHasChildren()
                         && miningWorker.isHasStateSync();
             }
 
             return miningWorker.isBrokerConnected()
                     && miningWorker.isHasDataSync()
+                    //&& (miningWorker.isHasParents() || miningWorker.isHasChildren())
                     && miningWorker.isHasStateSync();
         }
 
@@ -154,9 +152,7 @@ public class Miner implements Mining {
 
     private void mineBlock(List<PseudoTransaction> availablePseudoTransaction, ChainState state) {
 
-        this.isWorking = true;
-
-        lockTransactions(availablePseudoTransaction);
+        BlockMetadata newBlock;
 
         Coin reward = state.getReward();
         Integer difficulty = state.getTarget();
@@ -164,21 +160,35 @@ public class Miner implements Mining {
         Block prevBlock = (state.getLastBlockIndex()) <= 0 ? state.getGenesisBlock()
                 : storage.getBlockByIndex(state.getLastBlockIndex());
 
+//        if(state.isAllowEmptyMining()) {
+//            if(!availablePseudoTransaction.isEmpty()) {
+//                this.isWorking = true;
+//                lockTransactions(availablePseudoTransaction);
+//                newBlock = generateBlock(reward, difficulty, prevBlock.getHash(), prevBlock.getHeader().getIndex(), availablePseudoTransaction);
+//            } else {
+//                this.isWorking = true;
+//                newBlock = generateEmptyBlock(reward, difficulty, prevBlock.getHash(), prevBlock.getHeader().getIndex());
+//            }
+//        } else {
+//            if(!availablePseudoTransaction.isEmpty()) {
+//                this.isWorking = true;
+//                lockTransactions(availablePseudoTransaction);
+//                newBlock = generateBlock(reward, difficulty, prevBlock.getHash(), prevBlock.getHeader().getIndex(), availablePseudoTransaction);
+//            } else {
+//                newBlock = null;
+//            }
+//        }
 
-        BlockMetadata newBlock;
 
-        if(state.isAllowEmptyMining()
-                && availablePseudoTransaction.isEmpty()) {
-            newBlock = generateEmptyBlock(reward, difficulty, prevBlock.getHash(), prevBlock.getHeader().getIndex());
-        } else if(!state.isAllowEmptyMining() && !availablePseudoTransaction.isEmpty()) {
+        if (!availablePseudoTransaction.isEmpty() || state.isAllowEmptyMining()) {
+            this.isWorking = true;
+            lockTransactions(availablePseudoTransaction);
             newBlock = generateBlock(reward, difficulty, prevBlock.getHash(), prevBlock.getHeader().getIndex(), availablePseudoTransaction);
         } else {
             newBlock = null;
         }
 
-        log.info("Hash:{}", newBlock);
-
-
+        log.info("Working on:{}-{}-{}", newBlock.getBlock().getHash(), newBlock.getBlock().getHeader().getNonce(), newBlock.getBlock().getHeader().getMarkleRoot());
 
         if(newBlock != null && (BlockchainUtils.computedTargetValue(newBlock.getBlock().getHash(), difficulty))) {
                 this.miningWorker.setPauseMining(true);
@@ -228,22 +238,32 @@ public class Miner implements Mining {
         blockHeader.setTimeStamp(this.startTime);
         blockHeader.setBlockTime(System.currentTimeMillis());
 
-        int transactionIndex = 0;
-        for(PseudoTransaction pseudoTransaction : pseudoTransactions) {
+        if(!pseudoTransactions.isEmpty()){
+            int transactionIndex = 0;
+            for(PseudoTransaction pseudoTransaction : pseudoTransactions) {
 
 
-            Transaction transaction = BlockchainUtils
-                    .mapPsuedoTransactionToTransaction(pseudoTransaction, blockHeader, transactionIndex);
+                Transaction transaction = BlockchainUtils
+                        .mapPsuedoTransactionToTransaction(pseudoTransaction, blockHeader, transactionIndex);
 
-            pseudoHashes.add(pseudoTransaction.getPseudoHash());
-            transactionHashes.add(transaction.getHash());
+                pseudoHashes.add(pseudoTransaction.getPseudoHash());
+                transactionHashes.add(transaction.getHash());
 
-            transactionIndex++;
+                transactionIndex++;
+            }
+
+            blockHeader.setNumberOfTransactions(transactionHashes.size());
+        } else {
+            blockHeader.setNumberOfTransactions(0);
         }
 
-        blockHeader.setNumberOfTransactions(transactionHashes.size());
 
-        String markleRoot = BlockchainUtils.markleRootGenerator(transactionHashes);
+        String markleRoot = "0000000000000000000000000000000000000000000000000000000000000000";
+
+        if(BlockchainUtils.markleRootGenerator(transactionHashes) != null) {
+            markleRoot = BlockchainUtils.markleRootGenerator(transactionHashes);
+        }
+
 
         blockHeader.setMarkleRoot(markleRoot);
         blockHeader.setHash();

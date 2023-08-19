@@ -371,7 +371,7 @@ public class StorageServices {
     }
 
     public void addPeer(Peer peer) {
-        final byte[] serializedKey = (peer.getAddress() + peer.getPort()).getBytes();
+        final byte[] serializedKey = (peer.getAddress()).getBytes();
         final byte[] serializedPeer = SerializationUtils.serialize(peer);
 
         try {

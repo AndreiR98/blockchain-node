@@ -54,9 +54,9 @@ public class NodeConfig {
     public void startBrokerConnection() {
         TcpClient.create()
                 //.host("crawler-dns.default.svc.cluster.local")
-                //.host("3.8.20.9")
+                .host("3.8.20.9")
                 //.bindAddress(addressSupplier())
-                .host("localhost")
+                //.host("localhost")
                 .option(ChannelOption.SO_KEEPALIVE, true)
                 .port(7331)
                 .wiretap(true)
@@ -70,18 +70,18 @@ public class NodeConfig {
                 .subscribe();
     }
 
-    //@Bean
-    public void startServer() {
-        TcpServer.create()
+    @Bean
+    public Mono<Void> startServer() {
+        return TcpServer.create()
                 .port(7331)
-                .host(config.getNodeServerIP())
-                //.doOnConnection(serverTransmissionHandler())
+                .option(ChannelOption.SO_KEEPALIVE, true)
+                //.host(config.getNodeServerIP())
                 .handle(serverTransmissionHandler())
-                .wiretap(true)
-                .bindNow();
+                .doOnBound(server -> log.info("Server started on address:{} and port:{}", server.address(), server.port()))
+                .doOnUnbound(server -> log.info("Server stopped!"))
+                .bindNow()
+                .onDispose();
     }
-
-
 
     @Bean
     public PeersConnectionFactory connectionFactory() {

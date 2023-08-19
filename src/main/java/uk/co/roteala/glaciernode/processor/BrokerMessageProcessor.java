@@ -185,13 +185,10 @@ public class BrokerMessageProcessor implements Processor {
                         throw new MiningException(MiningErrorCode.BLOCK_NOT_FOUND);
                     }
 
-                    state.setLastBlockIndex(state.getLastBlockIndex() + 1);
+                    //state.setLastBlockIndex(state.getLastBlockIndex() + 1);
                     nodeState.setUpdatedAt(System.currentTimeMillis());
-                    nodeState.setRemainingBlocks(nodeState.getRemainingBlocks() - 1);
-
-                    if(nodeState.getRemainingBlocks() == 0) {
-                        this.worker.setHasDataSync(true);
-                    }
+                    //nodeState.setRemainingBlocks(nodeState.getRemainingBlocks() - 1);
+                    nodeState.setLastBlockIndex(nodeState.getLastBlockIndex()+1);
 
                     storage.addNodeState(nodeState);
                     log.info("Updated node state:{}", nodeState);
@@ -284,31 +281,16 @@ public class BrokerMessageProcessor implements Processor {
     private void processMessagePeers(Message message){
         MessageActions action = message.getMessageAction();
 
-        PeersContainer container = (PeersContainer) message.getMessage();
-
         NodeState nodeState = storage.getNodeState();
 
+        PeersContainer container = (PeersContainer) message.getMessage();
+
         final PeersMessageProcessor peersMessageProcessor =
-                new PeersMessageProcessor(storage, worker, connection);
+                new PeersMessageProcessor(storage, worker, connection, container, peersConnectionFactory, clientConnectionStorage);
 
         switch (action) {
-            case REQUEST_SYNC:
-               if(!container.getPeersList().isEmpty()) {
-                   for(String ip : container.getPeersList()) {
-                       Peer peer = new Peer();
-                       peer.setActive(true);
-                       peer.setAddress(ip);
-                       peer.setPort(7331);
-                       peer.setLastTimeSeen(System.currentTimeMillis());
-
-                       this.storage.addPeer(peer);
-
-                       this.peersConnectionFactory.createConnection(peer);
-                   }
-               }
-                break;
-            case NO_CONNECTIONS:
-                peersMessageProcessor.processNoConnections();
+            case TRY_CONNECTIONS:
+                peersMessageProcessor.processTryConnections();
                 break;
         }
     }
