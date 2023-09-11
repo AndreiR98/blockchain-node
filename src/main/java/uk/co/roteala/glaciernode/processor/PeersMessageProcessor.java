@@ -82,9 +82,11 @@ public class PeersMessageProcessor {
                                 numberOfConnections = this.clientConnectionStorage.getClientConnections().size();
                             }
 
+                            /**
+                             * Ask broker to sync
+                             * */
                             if(numberOfConnections <= 0) {
                                 MessageWrapper peersRequest = new MessageWrapper();
-                                peersRequest.setVerified(true);
                                 peersRequest.setType(MessageTypes.PEERS);
                                 peersRequest.setContent(nodeState);//Send node state
                                 peersRequest.setAction(MessageActions.NO_CONNECTIONS);
@@ -95,6 +97,20 @@ public class PeersMessageProcessor {
                                         .then().subscribe();
                             } else {
                                 this.worker.setHasParents(true);
+
+                                MessageWrapper messageWrapper = new MessageWrapper();
+                                messageWrapper.setType(MessageTypes.NODESTATE);
+                                messageWrapper.setContent(nodeState);
+                                messageWrapper.setAction(MessageActions.REQUEST_SYNC);
+
+                                for(Connection connection : this.clientConnectionStorage.getClientConnections()){
+
+                                    log.info("Require sync from:{}", connection);
+
+                                    connection.outbound()
+                                            .sendObject(messageWrapper.serialize())
+                                            .then().subscribe();
+                                }
                             }
                             log.info("===== CONNECTION FACTORY ENDED =====");
                         })
@@ -128,7 +144,6 @@ public class PeersMessageProcessor {
                             MessageWrapper messageWrapper = new MessageWrapper();
                             messageWrapper.setAction(MessageActions.REQUEST);
                             messageWrapper.setType(MessageTypes.BLOCKHEADER);
-                            messageWrapper.setVerified(true);
                             messageWrapper.setContent(blockHeader);
 
                             return messageWrapper;

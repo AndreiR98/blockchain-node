@@ -54,9 +54,9 @@ public class NodeConfig {
     public void startBrokerConnection() {
         TcpClient.create()
                 //.host("crawler-dns.default.svc.cluster.local")
-                .host("3.8.20.9")
+                //.host("3.8.20.9")
                 //.bindAddress(addressSupplier())
-                //.host("localhost")
+                .host("3.10.246.30")
                 .option(ChannelOption.SO_KEEPALIVE, true)
                 .port(7331)
                 .wiretap(true)
@@ -70,7 +70,7 @@ public class NodeConfig {
                 .subscribe();
     }
 
-    @Bean
+    //@Bean
     public Mono<Void> startServer() {
         return TcpServer.create()
                 .port(7331)

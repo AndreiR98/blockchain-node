@@ -46,11 +46,9 @@ public class BrokerConnectionStorage implements Consumer<Connection> {
         if(state == null) {
             messageWrapper.setAction(MessageActions.REQUEST);
             messageWrapper.setType(MessageTypes.STATECHAIN);
-            messageWrapper.setVerified(true);
         } else {
             messageWrapper.setAction(MessageActions.REQUEST_SYNC);
             messageWrapper.setType(MessageTypes.STATECHAIN);
-            messageWrapper.setVerified(true);
         }
 
         connection.outbound().sendObject(Mono.just(messageWrapper.serialize()))

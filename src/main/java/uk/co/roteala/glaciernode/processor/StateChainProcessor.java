@@ -14,6 +14,7 @@ import uk.co.roteala.common.NodeState;
 import uk.co.roteala.common.events.MessageActions;
 import uk.co.roteala.common.events.MessageTypes;
 import uk.co.roteala.common.events.MessageWrapper;
+import uk.co.roteala.common.events.ValidationType;
 import uk.co.roteala.exceptions.SyncException;
 import uk.co.roteala.exceptions.errorcodes.SyncErrorCode;
 import uk.co.roteala.glaciernode.miner.MiningWorker;
@@ -142,6 +143,7 @@ public class StateChainProcessor {
                              * Count how many success connections we achieved
                              * */
                             int numberOfConnections = 0;
+                            log.info("Connections:{}", this.clientConnectionStorage.getClientConnections());
                             if(this.clientConnectionStorage.getClientConnections() != null){
                                 numberOfConnections = this.clientConnectionStorage.getClientConnections().size();
                             }
@@ -151,7 +153,7 @@ public class StateChainProcessor {
                                 this.worker.setHasParents(true);
                             } else {
                                 MessageWrapper peersRequest = new MessageWrapper();
-                                peersRequest.setVerified(true);
+                                peersRequest.setVerified(ValidationType.TRUE);
                                 peersRequest.setType(MessageTypes.PEERS);
                                 peersRequest.setContent(nodeState);//Send node state
                                 peersRequest.setAction(MessageActions.EMPTY_PEERS);
@@ -166,7 +168,7 @@ public class StateChainProcessor {
                         .then().subscribe();
             } else {
                 MessageWrapper peersRequest = new MessageWrapper();
-                peersRequest.setVerified(true);
+                peersRequest.setVerified(ValidationType.TRUE);
                 peersRequest.setType(MessageTypes.PEERS);
                 peersRequest.setContent(nodeState);//Send node state
                 peersRequest.setAction(MessageActions.EMPTY_PEERS);
@@ -220,7 +222,7 @@ public class StateChainProcessor {
                         MessageWrapper blockRequestWrapper = new MessageWrapper();
                         blockRequestWrapper.setAction(MessageActions.REQUEST);
                         blockRequestWrapper.setType(MessageTypes.BLOCKHEADER);
-                        blockRequestWrapper.setVerified(true);
+                        blockRequestWrapper.setVerified(ValidationType.TRUE);
                         blockRequestWrapper.setContent(BlockHeader.builder()
                                         .index(i)
                                 .build());

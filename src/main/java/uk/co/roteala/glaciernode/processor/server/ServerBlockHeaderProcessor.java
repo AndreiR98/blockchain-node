@@ -12,6 +12,7 @@ import uk.co.roteala.common.*;
 import uk.co.roteala.common.events.MessageActions;
 import uk.co.roteala.common.events.MessageTypes;
 import uk.co.roteala.common.events.MessageWrapper;
+import uk.co.roteala.common.events.ValidationType;
 import uk.co.roteala.exceptions.MiningException;
 import uk.co.roteala.exceptions.errorcodes.MiningErrorCode;
 import uk.co.roteala.glaciernode.miner.MiningWorker;
@@ -105,7 +106,7 @@ public class ServerBlockHeaderProcessor {
 
             MessageWrapper clientsWrapper = new MessageWrapper();
             clientsWrapper.setType(MessageTypes.BLOCKHEADER);
-            clientsWrapper.setVerified(true);
+            clientsWrapper.setVerified(ValidationType.TRUE);
             clientsWrapper.setContent(this.blockHeader);
             clientsWrapper.setAction(MessageActions.MINED_BLOCK);
 
@@ -130,7 +131,7 @@ public class ServerBlockHeaderProcessor {
         } catch (Exception e) {
             MessageWrapper brokerWrapper = new MessageWrapper();
             brokerWrapper.setAction(MessageActions.VERIFIED_MINED_BLOCK);
-            brokerWrapper.setVerified(false);
+            brokerWrapper.setVerified(ValidationType.TRUE);
             brokerWrapper.setContent(this.blockHeader);
             brokerWrapper.setType(MessageTypes.BLOCKHEADER);
 
@@ -185,7 +186,7 @@ public class ServerBlockHeaderProcessor {
 
             MessageWrapper clientsWrapper = new MessageWrapper();
             clientsWrapper.setType(MessageTypes.BLOCKHEADER);
-            clientsWrapper.setVerified(true);
+            clientsWrapper.setVerified(ValidationType.TRUE);
             clientsWrapper.setContent(this.blockHeader);
             clientsWrapper.setAction(MessageActions.MINED_BLOCK);
 
@@ -210,7 +211,7 @@ public class ServerBlockHeaderProcessor {
         } catch (Exception e) {
             MessageWrapper brokerWrapper = new MessageWrapper();
             brokerWrapper.setAction(MessageActions.VERIFIED_MINED_BLOCK);
-            brokerWrapper.setVerified(false);
+            brokerWrapper.setVerified(ValidationType.FALSE);
             brokerWrapper.setContent(this.blockHeader);
             brokerWrapper.setType(MessageTypes.BLOCKHEADER);
 

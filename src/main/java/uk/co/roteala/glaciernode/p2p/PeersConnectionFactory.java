@@ -40,7 +40,7 @@ public class PeersConnectionFactory {
         return TcpClient.create()
                 .host(peer.getAddress())
                 .port(7331)
-                .bindAddress(addressSupplier)
+                //.bindAddress(addressSupplier)
                 .doOnConnected(clientConnectionStorage)
                 .handle(clientTransmissionHandler)
                 .doOnDisconnected(connection -> {

@@ -101,6 +101,10 @@ public class Storage {
             dbOptions.setDbLogDir(configs.getBlocksPathLogs().getAbsolutePath());
             dbOptions.setAllowConcurrentMemtableWrite(true);
             dbOptions.setCreateMissingColumnFamilies(true);
+            dbOptions.setAtomicFlush(true);
+            dbOptions.setPersistStatsToDisk(true);
+            dbOptions.setSkipCheckingSstFileSizesOnDbOpen(true);
+            //dbOptions.setSstFileManager(new SstFileManager())
 
 
             ColumnFamilyOptions columnFamilyOptions = new ColumnFamilyOptions();

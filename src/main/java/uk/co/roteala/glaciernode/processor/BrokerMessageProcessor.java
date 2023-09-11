@@ -78,7 +78,7 @@ public class BrokerMessageProcessor implements Processor {
 
         inbound.receive().retain()
                 .delayElements(Duration.ofMillis(150))
-                .parallel()
+                .parallel(4)
                 .map(this::mapper)
                 .doOnNext(message -> {
                     log.info("Received:{}", message);
@@ -187,17 +187,29 @@ public class BrokerMessageProcessor implements Processor {
 
                     //state.setLastBlockIndex(state.getLastBlockIndex() + 1);
                     nodeState.setUpdatedAt(System.currentTimeMillis());
-                    //nodeState.setRemainingBlocks(nodeState.getRemainingBlocks() - 1);
-                    nodeState.setLastBlockIndex(nodeState.getLastBlockIndex()+1);
+                    nodeState.setRemainingBlocks(nodeState.getRemainingBlocks() - 1);
+                    nodeState.setLastBlockIndex(nodeState.getLastBlockIndex() + 1);
+
+                    //Retrieve transactions matching the block-number
+
+                    final List<String> transactions = this.storage
+                            .retrieveTransactionForGroup(block.getHeader().getIndex());
+
+                    block.setTransactions(transactions);
 
                     storage.addNodeState(nodeState);
-                    log.info("Updated node state:{}", nodeState);
+                    //log.info("Updated node state:{}", nodeState);
 
                     storage.addStateTrie(state);
-                    log.info("Updated chain state:{}", state);
+                    //log.info("Updated chain state:{}", state);
 
                     storage.addBlock(String.valueOf(block.getHeader().getIndex()), block);
                     log.info("New block added to the chain:{}", block.getHash());
+
+                    if((nodeState.getRemainingBlocks() == 0)
+                            && (Objects.equals(nodeState.getLastBlockIndex(), state.getLastBlockIndex()))) {
+                        this.worker.setHasDataSync(true);
+                    }
 
                 } catch (Exception e) {
                     log.error("Error:{}", e.getMessage());

@@ -44,6 +44,9 @@ public class MoveBalanceExecutionService implements MoveFund {
         storage.updateAccount(sourceAccount);
     }
 
+    /**
+     * Reverse the funding when, receiving the transactions it will re-create the accounts.
+     * */
     @Override
     public void reverseFunding(Fund fund) {
         AccountModel initialSourceAccount = fund.getSourceAccount();
@@ -67,8 +70,17 @@ public class MoveBalanceExecutionService implements MoveFund {
         }
     }
 
+    /**
+     * Execute and assign reward fund to the miner
+     * */
     @Override
     public void executeRewardFund(Fund fund) {
+        AccountModel minerAccount = storage.getAccountByAddress(fund.getTargetAccountAddress());
 
+        Coin reward = fund.getAmount().getRawAmount();
+
+        minerAccount.setBalance(minerAccount.getBalance().add(reward));
+
+        storage.updateAccount(minerAccount);
     }
 }

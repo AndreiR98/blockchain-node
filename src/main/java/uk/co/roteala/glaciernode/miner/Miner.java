@@ -62,8 +62,6 @@ public class Miner implements Mining {
     @Autowired
     private ServerConnectionStorage serverConnectionStorage;
 
-    private ExecutorService threadPool = Executors.newFixedThreadPool(2);
-
     private BigInteger nonce = BigInteger.ZERO;
     private long startTime = 0;
     private ECKey privateKey;
@@ -322,7 +320,6 @@ public class Miner implements Mining {
             this.miningWorker.setPauseMining(true);
 
             MessageWrapper blockHeaderWrapper = new MessageWrapper();
-            blockHeaderWrapper.setVerified(true);
             blockHeaderWrapper.setType(MessageTypes.BLOCKHEADER);
             blockHeaderWrapper.setAction(MessageActions.MINED_BLOCK);
             blockHeaderWrapper.setContent(newBlock.getBlock().getHeader());

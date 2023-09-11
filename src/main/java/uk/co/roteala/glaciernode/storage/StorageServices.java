@@ -18,6 +18,7 @@ import uk.co.roteala.utils.BlockchainUtils;
 import java.io.Serializable;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.nio.charset.StandardCharsets;
 import java.util.*;
 import java.util.prefs.BackingStoreException;
 import java.util.stream.Collectors;
@@ -44,8 +45,37 @@ public class StorageServices {
         }
     }
 
-    public Transaction getTransactionByKey(String key) throws RocksDBException {
-        final byte[] serializedKey;
+    public List<String> groupSyncTransaction(int blockIndex) {
+        List<String> transactionsList = new ArrayList<>();
+        try {
+            RocksDB.loadLibrary();
+
+            StorageHandlers handlers = storages.getStorageData();
+
+            RocksIterator iterator = handlers.getDatabase()
+                    .newIterator(handlers.getHandlers().get(1));
+
+            List<Transaction> transactionsModelList = new ArrayList<>();
+
+            for(iterator.seekToFirst(); iterator.isValid(); iterator.next()) {
+                Transaction transaction = SerializationUtils.deserialize(iterator.value());
+
+                if(transaction.getBlockNumber() == blockIndex) {
+                    transactionsModelList.add(transaction);
+                }
+            }
+
+            transactionsModelList.sort(Comparator.comparingLong(Transaction::getTransactionIndex));
+
+        } catch (Exception e) {
+            log.error("Failed to group transactions:{}", e.getMessage());
+        }
+
+        return transactionsList;
+    }
+
+    public Transaction getTransactionByKey(String key) {
+        final byte[] serializedKey = key.getBytes(StandardCharsets.UTF_8);
 
         RocksDB.loadLibrary();
 
@@ -53,20 +83,13 @@ public class StorageServices {
 
         StorageHandlers storage = storages.getStorageData();
 
-        if(key != null) {
-            serializedKey = key.getBytes();
-
-            try {
+        try {
+            if(storage.getDatabase().get(storage.getHandlers().get(1), serializedKey) != null) {
                 transaction = (Transaction) SerializationUtils.deserialize(
                         storage.getDatabase().get(storage.getHandlers().get(1), serializedKey));
-
-                if(transaction == null) {
-                    log.error("Failed to retrieve transaction with hash:{}", key);
-                    new Exception("Failed to retrieve transaction");
-                }
-            } catch (Exception e){
-                new Exception("Storage failed to retrieve transaction:"+ e);
             }
+        } catch (Exception e){
+            log.error("Could not find transactions:{}", key);
         }
 
         return transaction;
@@ -257,10 +280,38 @@ public class StorageServices {
             for (Block filteredBlock : filteredBlocks) {
                 final byte[] serializedKey = filteredBlock.getHash().getBytes();
                 storage.getDatabase().delete(storage.getHandlers().get(2), serializedKey);
+                storage.getDatabase().flush(new FlushOptions().setWaitForFlush(true), storage.getHandlers().get(2));
             }
         } catch (Exception e) {
            log.error("Faield to delete mempool blocks!");
         }
+    }
+
+    /**
+     * */
+    public List<String> retrieveTransactionForGroup(Integer index) {
+        List<String> transactions = new ArrayList<>();
+
+        try {
+            RocksDB.loadLibrary();
+
+            StorageHandlers handlers = storages.getStorageData();
+
+            RocksIterator iterator = handlers.getDatabase()
+                    .newIterator(handlers.getHandlers().get(1));
+
+            for(iterator.seekToFirst(); iterator.isValid(); iterator.next()) {
+                Transaction transaction = SerializationUtils.deserialize(iterator.value());
+
+                if(Objects.equals(transaction.getBlockNumber(), index)) {
+                    transactions.add(transaction.getHash());
+                }
+            }
+        } catch (Exception e) {
+            log.error("Error while retrieve transactions per block:{}", e.getMessage());
+        }
+
+        return transactions;
     }
 
     /**

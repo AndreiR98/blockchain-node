@@ -12,6 +12,7 @@ import uk.co.roteala.common.*;
 import uk.co.roteala.common.events.MessageActions;
 import uk.co.roteala.common.events.MessageTypes;
 import uk.co.roteala.common.events.MessageWrapper;
+import uk.co.roteala.common.events.ValidationType;
 import uk.co.roteala.common.monetary.AmountDTO;
 import uk.co.roteala.common.monetary.Fund;
 import uk.co.roteala.common.monetary.MoveFund;
@@ -63,7 +64,6 @@ public class BlockHeaderProcessor {
                 MessageWrapper messageWrapper = new MessageWrapper();
                 messageWrapper.setAction(MessageActions.REQUEST);
                 messageWrapper.setType(MessageTypes.BLOCKHEADER);
-                messageWrapper.setVerified(true);
                 messageWrapper.setContent(this.blockHeader);
 
                 this.brokerConnection.outbound()
@@ -197,7 +197,7 @@ public class BlockHeaderProcessor {
         } catch (Exception e) {
             MessageWrapper brokerWrapper = new MessageWrapper();
             brokerWrapper.setAction(MessageActions.VERIFIED_MINED_BLOCK);
-            brokerWrapper.setVerified(false);
+            brokerWrapper.setVerified(ValidationType.FALSE);
             brokerWrapper.setContent(this.blockHeader);
             brokerWrapper.setType(MessageTypes.BLOCKHEADER);
 
@@ -209,16 +209,16 @@ public class BlockHeaderProcessor {
         }
     }
 
-    private boolean tryToValidateBlock() {
+    private ValidationType tryToValidateBlock() {
         Block block = this.storage.getPseudoBlockByHash(this.blockHeader.getHash());
 
         if(block == null) {
             validateHeader();
         } else {
-            return true;
+            return ValidationType.TRUE;
         }
 
-        return false;
+        return ValidationType.FALSE;
     }
 
     private boolean validateHeader() {

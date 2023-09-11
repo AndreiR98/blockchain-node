@@ -6,10 +6,13 @@ import org.springframework.stereotype.Component;
 import reactor.netty.Connection;
 import reactor.netty.NettyInbound;
 import reactor.netty.NettyOutbound;
-import uk.co.roteala.common.BlockHeader;
+import uk.co.roteala.common.*;
 import uk.co.roteala.common.events.Message;
 import uk.co.roteala.common.events.MessageActions;
 import uk.co.roteala.common.events.MessageTypes;
+import uk.co.roteala.common.monetary.AmountDTO;
+import uk.co.roteala.common.monetary.Fund;
+import uk.co.roteala.common.monetary.MoveFund;
 import uk.co.roteala.glaciernode.miner.MiningWorker;
 import uk.co.roteala.glaciernode.p2p.BrokerConnectionStorage;
 import uk.co.roteala.glaciernode.p2p.ClientConnectionStorage;
@@ -18,6 +21,7 @@ import uk.co.roteala.glaciernode.processor.client.ClientBlockHeaderProcessor;
 import uk.co.roteala.glaciernode.storage.StorageServices;
 
 import java.time.Duration;
+import java.util.List;
 
 /**
  * Process messages coming from other servers
@@ -42,6 +46,9 @@ public class ClientMessageProcessor implements Processor {
 
     @Autowired
     private MiningWorker miningWorker;
+
+    @Autowired
+    private MoveFund moveFund;
 
     private Connection connection;
 
@@ -89,6 +96,24 @@ public class ClientMessageProcessor implements Processor {
             case BLOCK:
                 processBlock(message);
                 break;
+            case NODESTATE:
+                processNodeState(message); //Only to sync the node
+                break;
+        }
+    }
+
+    private void processNodeState(Message message) {
+        MessageActions messageActions = message.getMessageAction();
+
+        NodeState nodeState = (NodeState) message.getMessage();
+
+        final NodeStateProcessor nodeStateProcessor =
+                new NodeStateProcessor(storage, nodeState, connection);
+
+        switch (messageActions) {
+            case REQUEST_SYNC:
+                nodeStateProcessor.processRequestSync();
+                break;
         }
     }
 
@@ -108,7 +133,47 @@ public class ClientMessageProcessor implements Processor {
         }
     }
 
-    private void processTransaction(Message message) {}
+    /**
+     * Appedn transaction to the chain
+     * */
+    private void processTransaction(Message message) {
+        try {
+            Transaction transaction = (Transaction) message.getMessage();
 
-    private void processBlock(Message message) {}
+            AccountModel sourceAccount = this.storage.getAccountByAddress(transaction.getFrom());
+
+            Fund fund = Fund.builder()
+                    .isProcessed(true)
+                    .amount(new AmountDTO(transaction.getValue(), transaction.getFees()))
+                    .sourceAccount(sourceAccount)
+                    .targetAccountAddress(transaction.getTo())
+                    .build();
+
+            moveFund.reverseFunding(fund);
+
+            this.storage.addTransaction(transaction.getHash(), transaction);
+            log.info("Transaction:{} added to the chain!",transaction.getHash());
+
+        } catch (Exception e) {
+            log.error("Failing synchronizing transaction:{}",e.getMessage());
+        }
+    }
+
+    /**
+     * Append block to the chain
+     * */
+    private void processBlock(Message message) {
+        try {
+            Block block = (Block) message.getMessage();
+
+            List<String> transactionList = this.storage.groupSyncTransaction(block.getHeader().getIndex());
+
+            block.setTransactions(transactionList);
+
+            this.storage.addBlock(String.valueOf(block.getHeader().getIndex()), block);
+            log.info("Block of index:{} synchronized", block.getHeader().getIndex());
+        } catch (Exception e) {
+            log.error("Failing synchronizing block:{}", e.getMessage());
+        }
+    }
 }
