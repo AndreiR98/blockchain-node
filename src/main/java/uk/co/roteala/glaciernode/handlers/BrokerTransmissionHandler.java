@@ -3,11 +3,15 @@ package uk.co.roteala.glaciernode.handlers;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.reactivestreams.Publisher;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import reactor.core.publisher.Flux;
+import reactor.core.publisher.Mono;
 import reactor.netty.NettyInbound;
 import reactor.netty.NettyOutbound;
-import uk.co.roteala.glaciernode.processor.BrokerMessageProcessor;
+import uk.co.roteala.common.messenger.MessengerUtils;
+import uk.co.roteala.glaciernode.p2p.AssemblerMessenger;
+import uk.co.roteala.glaciernode.p2p.ExecutorMessenger;
 
 import java.util.concurrent.Flow;
 import java.util.function.BiFunction;
@@ -20,12 +24,22 @@ import java.util.function.BiFunction;
 @RequiredArgsConstructor
 public class BrokerTransmissionHandler implements BiFunction<NettyInbound, NettyOutbound, Publisher<Void>> {
 
-    private final BrokerMessageProcessor brokerMessageProcessor;
+    @Autowired
+    private AssemblerMessenger assembler;
+
+    @Autowired
+    private ExecutorMessenger executor;
 
     @Override
-    public Publisher<Void> apply(NettyInbound inbound, NettyOutbound outbound) {
-
-        brokerMessageProcessor.forwardMessage(inbound, outbound);
+    public Mono<Void> apply(NettyInbound inbound, NettyOutbound outbound) {
+        inbound.receive().retain()
+                .parallel(4)
+                .doOnNext(byteBuf -> log.info("B:{}", byteBuf.readableBytes()))
+                .map(MessengerUtils::deserialize)//Map into message chunk
+                .map(this.assembler)//assemble the chunks into
+                .doOnNext(this.executor)
+                .then()
+                .subscribe();
 
         return outbound.neverComplete();
     }

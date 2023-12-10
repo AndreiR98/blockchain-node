@@ -11,20 +11,15 @@
 
     <groupId>uk.co.roteala</groupId>
     <artifactId>blockchain-node</artifactId>
-    <version>${revision}</version>
+    <version>3.0.0-SNAPSHOT</version>
     <name>blockchain-node</name>
 
     <description>blockchain-node</description>
 
     <properties>
         <java.version>11</java.version>
-        <revision>2.0.0-SNAPSHOT</revision>
-        <glacier.core.version>2.0.0-SNAPSHOT</glacier.core.version>
-        <spring.version>5.5.11</spring.version>
-        <spring.boot.version>2.5.13</spring.boot.version>
-        <spring.kubernetes.version>2.7.13.RELEASE</spring.kubernetes.version>
+        <blockchain-commons.version>3.0.0-IMPROVED</blockchain-commons.version>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-        <spring.cloud.deployer.kubernetes.version>2.7.4</spring.cloud.deployer.kubernetes.version>
         <dockerRepository>dev-ent-jpoc1:5000/</dockerRepository>
         <image>${dockerRepository}${project.artifactId}:${project.version}</image>
     </properties>
@@ -34,7 +29,7 @@
         <dependency>
             <groupId>uk.co.roteala</groupId>
             <artifactId>blockchain-commons</artifactId>
-            <version>${glacier.core.version}</version>
+            <version>${blockchain-commons.version}</version>
         </dependency>
 
         <dependency>
@@ -43,20 +38,15 @@
         </dependency>
 
         <dependency>
-            <groupId>io.netty</groupId>
-            <artifactId>netty-all</artifactId>
-            <version>4.1.89.Final</version>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-actuator</artifactId>
         </dependency>
 
+        <!-- https://mvnrepository.com/artifact/commons-io/commons-io -->
         <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter</artifactId>
-        </dependency>
-
-        <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-test</artifactId>
-            <scope>test</scope>
+            <groupId>commons-io</groupId>
+            <artifactId>commons-io</artifactId>
+            <version>2.13.0</version>
         </dependency>
 
         <dependency>
@@ -73,59 +63,13 @@
         </dependency>
 
         <dependency>
-            <groupId>io.netty</groupId>
-            <artifactId>netty-codec-http</artifactId>
-            <version>4.1.69.Final</version>
-        </dependency>
-
-        <dependency>
-            <groupId>io.netty</groupId>
-            <artifactId>netty-codec</artifactId>
-            <version>4.1.69.Final</version>
-        </dependency>
-        <dependency>
-            <groupId>io.netty</groupId>
-            <artifactId>netty-handler-proxy</artifactId>
-            <version>4.1.69.Final</version>
-        </dependency>
-
-        <dependency>
-            <groupId>com.google.guava</groupId>
-            <artifactId>guava</artifactId>
-            <version>32.0.1-jre</version>
-        </dependency>
-
-        <dependency>
-            <groupId>org.springframework.cloud</groupId>
-            <artifactId>spring-cloud-deployer-kubernetes</artifactId>
-            <version>${spring.cloud.deployer.kubernetes.version}</version>
-        </dependency>
-
-        <dependency>
             <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-test</artifactId>
-            <scope>test</scope>
-            <exclusions>
-                <exclusion>
-                    <groupId>org.junit.vintage</groupId>
-                    <artifactId>junit-vintage-engine</artifactId>
-                </exclusion>
-            </exclusions>
-        </dependency>
-
-        <dependency>
-            <groupId>jakarta.persistence</groupId>
-            <artifactId>jakarta.persistence-api</artifactId>
-            <version>2.2.3</version>
+            <artifactId>spring-boot-starter-web</artifactId>
         </dependency>
 
         <dependency>
             <groupId>org.projectlombok</groupId>
             <artifactId>lombok</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-actuator</artifactId>
         </dependency>
     </dependencies>
 
@@ -157,31 +101,6 @@
         </plugins>
         <pluginManagement>
             <plugins>
-                <plugin>
-                    <groupId>org.asciidoctor</groupId>
-                    <artifactId>asciidoctor-maven-plugin</artifactId>
-                    <version>1.5.8</version>
-                    <executions>
-                        <execution>
-                            <id>generate-docs</id>
-                            <phase>prepare-package</phase>
-                            <goals>
-                                <goal>process-asciidoc</goal>
-                            </goals>
-                            <configuration>
-                                <backend>html</backend>
-                                <doctype>book</doctype>
-                            </configuration>
-                        </execution>
-                    </executions>
-                    <dependencies>
-                        <dependency>
-                            <groupId>org.springframework.restdocs</groupId>
-                            <artifactId>spring-restdocs-asciidoctor</artifactId>
-                            <version>${spring-restdocs.version}</version>
-                        </dependency>
-                    </dependencies>
-                </plugin>
                 <plugin>
                     <groupId>org.springframework.boot</groupId>
                     <artifactId>spring-boot-maven-plugin</artifactId>

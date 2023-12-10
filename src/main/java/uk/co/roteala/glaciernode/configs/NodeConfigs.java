@@ -9,11 +9,11 @@ import org.springframework.context.annotation.Configuration;
 import java.io.File;
 import java.nio.file.Paths;
 
-@Setter
 @Getter
-@NoArgsConstructor
+@Setter
+@Configuration
 @ConfigurationProperties(prefix = "roteala.blockchain")
-public class GlacierConfigs {
+public class NodeConfigs {
     //private static final String ROOT_WINDOWS = "/blockchain/node-"+System.getenv("POD_ORDINAL_INDEX");
     private static final String ROOT_WINDOWS = System.getenv("APPDATA");
 
