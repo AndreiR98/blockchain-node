@@ -13,6 +13,7 @@ import uk.co.roteala.common.messenger.MessengerUtils;
 import uk.co.roteala.glaciernode.p2p.AssemblerMessenger;
 import uk.co.roteala.glaciernode.p2p.ExecutorMessenger;
 
+import java.util.Optional;
 import java.util.concurrent.Flow;
 import java.util.function.BiFunction;
 
@@ -34,9 +35,13 @@ public class BrokerTransmissionHandler implements BiFunction<NettyInbound, Netty
     public Mono<Void> apply(NettyInbound inbound, NettyOutbound outbound) {
         inbound.receive().retain()
                 .parallel(4)
-                .doOnNext(byteBuf -> log.info("B:{}", byteBuf.readableBytes()))
-                .map(MessengerUtils::deserialize)//Map into message chunk
-                .map(this.assembler)//assemble the chunks into
+                .map(MessengerUtils::deserialize) // Deserialize into message
+                .map(this.assembler) // Assemble chunks
+                .flatMap(optionalTemplate -> optionalTemplate.map(Mono::just).orElseGet(Mono::empty))
+                //.flatMap(Optional::stream)
+                .doOnNext(template -> {
+                    inbound.withConnection(template::setOwner);
+                })
                 .doOnNext(this.executor)
                 .then()
                 .subscribe();

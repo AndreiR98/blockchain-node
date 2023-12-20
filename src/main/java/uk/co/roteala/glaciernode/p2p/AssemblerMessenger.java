@@ -4,49 +4,42 @@ package uk.co.roteala.glaciernode.p2p;
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import lombok.extern.slf4j.Slf4j;
-import uk.co.roteala.common.BasicModel;
-import uk.co.roteala.common.events.MessageTemplate;
+import org.springframework.beans.factory.annotation.Autowired;
 import uk.co.roteala.common.messenger.*;
 
+import java.util.Optional;
 import java.util.function.Function;
 
 @Slf4j
-public class AssemblerMessenger implements Function<Message, MessageTemplate> {
-    private final Cache<String, MessageContainer> cache = Caffeine.newBuilder()
-            .maximumSize(500)
-            .build();
+public class AssemblerMessenger implements Function<Message, Optional<MessageTemplate>> {
+    @Autowired
+    private Cache<String, MessageContainer> cache;
 
     @Override
-    public MessageTemplate apply(Message message) {
+    public Optional<MessageTemplate> apply(Message message) {
         try {
+            log.info("Id:{}", message);
             MessageContainer container = cache.get(message.getMessageId(), k -> new MessageContainer());
 
-            log.info("Message:{}", message);
-
             if (message.getMessageType() == MessageType.EMPTY) {
-                return MessageTemplate.DEFAULT;
+                return Optional.empty();
             }
 
             if (message.getMessageType() == MessageType.KEY) {
-                log.info("Setting key for container: {}", message.getMessageId());
                 container.setKey((MessageKey) message);
             }
 
             if (message.getMessageType() == MessageType.CHUNK) {
-                log.info("Adding chunk for container: {}", message.getMessageId());
                 container.addChunk((MessageChunk) message);
             }
 
-            log.info("Aggregate status: {}", container.canAggregate());
             if (container.canAggregate()) {
-                log.info("Start aggregating container!");
-                return container.aggregate();
+                return Optional.of(container.aggregate());
             }
         } catch (Exception e) {
-            // Handle the exception appropriately, logging or rethrowing if necessary
             e.printStackTrace();
         }
 
-        return MessageTemplate.DEFAULT;
+        return Optional.empty();
     }
 }

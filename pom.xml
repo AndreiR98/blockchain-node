@@ -11,14 +11,14 @@
 
     <groupId>uk.co.roteala</groupId>
     <artifactId>blockchain-node</artifactId>
-    <version>3.0.0-SNAPSHOT</version>
+    <version>3.1.0-SNAPSHOT</version>
     <name>blockchain-node</name>
 
     <description>blockchain-node</description>
 
     <properties>
         <java.version>11</java.version>
-        <blockchain-commons.version>3.0.0-IMPROVED</blockchain-commons.version>
+        <blockchain-commons.version>3.1.0-SNAPSHOT</blockchain-commons.version>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <dockerRepository>dev-ent-jpoc1:5000/</dockerRepository>
         <image>${dockerRepository}${project.artifactId}:${project.version}</image>

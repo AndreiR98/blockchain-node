@@ -46,9 +46,6 @@ public class NodeConfig {
                 log.info("Creating new genesis state");
                 Blockchain.initializeGenesisState(storage.getStorage(StorageTypes.STATE));
                 Blockchain.initializeGenesisBlock(storage.getStorage(StorageTypes.BLOCKCHAIN));
-
-                storage.getStorage(StorageTypes.BLOCKCHAIN)
-                        .put(true, ColumnFamilyTypes.BLOCKS, "2".getBytes(), Constants.GENESIS_BLOCK);
             }
         } catch (Exception e) {
             log.error("Filed to initialize genesis state!", e);

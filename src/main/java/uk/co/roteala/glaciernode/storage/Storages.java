@@ -1,5 +1,7 @@
 package uk.co.roteala.glaciernode.storage;
 
+import com.github.benmanes.caffeine.cache.Cache;
+import com.github.benmanes.caffeine.cache.Caffeine;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.rocksdb.*;
@@ -7,6 +9,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
+import uk.co.roteala.common.messenger.MessageContainer;
 import uk.co.roteala.common.storage.ColumnFamilyTypes;
 import uk.co.roteala.common.storage.DefaultStorage;
 import uk.co.roteala.common.storage.Storage;
@@ -43,6 +46,8 @@ public class Storages  {
      * Represents the storage for peers.
      */
     private Storage peers;
+
+    private Cache<String, MessageContainer> cache;
 
     /**
      * Retrieves the appropriate storage instance based on the provided {@link StorageTypes}.
@@ -189,5 +194,12 @@ public class Storages  {
             log.error("Failed to initialize storage!", e);
             throw new StorageException(StorageErrorCode.STORAGE_FAILED);
         }
+    }
+
+    @Bean
+    public Cache<String, MessageContainer> initializeCache() {
+        return Caffeine.newBuilder()
+                //.maximumSize(500)
+                .build();
     }
 }

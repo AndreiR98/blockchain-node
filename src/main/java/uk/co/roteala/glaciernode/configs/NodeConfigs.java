@@ -15,7 +15,7 @@ import java.nio.file.Paths;
 @ConfigurationProperties(prefix = "roteala.blockchain")
 public class NodeConfigs {
     //private static final String ROOT_WINDOWS = "/blockchain/node-"+System.getenv("POD_ORDINAL_INDEX");
-    private static final String ROOT_WINDOWS = System.getenv("APPDATA");
+    private static final String ROOT_WINDOWS = System.getProperty("user.home");
 
     //private static final String ROOT_WINDOWS = System.getProperty("user.home");
 
