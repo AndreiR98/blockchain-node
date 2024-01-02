@@ -11,7 +11,7 @@ import java.util.Optional;
 import java.util.function.Consumer;
 
 @Slf4j
-public class ExecutorMessenger implements Consumer<MessageTemplate> {
+public abstract class ExecutorMessenger implements Consumer<MessageTemplate> {
     @Autowired
     private Cache<String, MessageContainer> cache;
     @Override

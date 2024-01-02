@@ -18,26 +18,26 @@ public class AssemblerMessenger implements Function<Message, Optional<MessageTem
     @Override
     public Optional<MessageTemplate> apply(Message message) {
         try {
-            log.info("Id:{}", message);
             MessageContainer container = cache.get(message.getMessageId(), k -> new MessageContainer());
 
-            if (message.getMessageType() == MessageType.EMPTY) {
-                return Optional.empty();
-            }
-
-            if (message.getMessageType() == MessageType.KEY) {
-                container.setKey((MessageKey) message);
-            }
-
-            if (message.getMessageType() == MessageType.CHUNK) {
-                container.addChunk((MessageChunk) message);
+            switch (message.getMessageType()) {
+                case EMPTY:
+                    cache.invalidate(message.getMessageId());
+                    return Optional.empty();
+                case KEY:
+                    container.setKey((MessageKey) message);
+                    break;
+                case CHUNK:
+                    container.addChunk((MessageChunk) message);
+                    break;
             }
 
             if (container.canAggregate()) {
+                cache.invalidate(message.getMessageId());
                 return Optional.of(container.aggregate());
             }
         } catch (Exception e) {
-            e.printStackTrace();
+            log.error("Error in message assembly: {}", e.getMessage(), e);
         }
 
         return Optional.empty();

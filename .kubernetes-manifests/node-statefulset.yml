@@ -26,10 +26,10 @@ spec:
                   fieldPath: metadata.annotations['statefulset.kubernetes.io/pod-name']
             - name: POD_IP
               valueFrom:
-                  fieldRef:
-                    fieldPath: status.podIP
+                fieldRef:
+                  fieldPath: status.podIP
           volumeMounts:
-            - mountPath: /blockchain
+            - mountPath: /root/roteala
               subPath: node-${POD_ORDINAL_INDEX}
               name: node-storage
       volumes:
@@ -43,4 +43,4 @@ spec:
         accessModes: ["ReadWriteOnce"]
         resources:
           requests:
-            storage: 1Gi
+            storage: 10Gi

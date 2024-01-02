@@ -93,10 +93,24 @@
                 <version>3.2.0</version>
                 <configuration>
                     <from>
-                        <image>adoptopenjdk/openjdk11:alpine-jre</image>
+                        <image>openjdk:11-jre-slim</image>
+                        <platforms>
+                            <platform>
+                                <architecture>amd64</architecture>
+                                <os>linux</os>
+                            </platform>
+                            <platform>
+                                <architecture>arm64</architecture>
+                                <os>linux</os>
+                            </platform>
+                        </platforms>
                     </from>
+                    <to>
+                        <image>${dockerRepository}/${project.artifactId}:${project.version}</image>
+                    </to>
                 </configuration>
             </plugin>
+
 
         </plugins>
         <pluginManagement>
@@ -118,12 +132,25 @@
                     <artifactId>jib-maven-plugin</artifactId>
                     <version>3.2.0</version>
                     <configuration>
-                        <allowInsecureRegistries>true</allowInsecureRegistries>
-                        <container>
-                            <creationTime>USE_CURRENT_TIMESTAMP</creationTime>
-                        </container>
+                        <from>
+                            <image>openjdk:11-jre-slim</image>
+                            <platforms>
+                                <platform>
+                                    <architecture>amd64</architecture>
+                                    <os>linux</os>
+                                </platform>
+                                <platform>
+                                    <architecture>arm64</architecture>
+                                    <os>linux</os>
+                                </platform>
+                            </platforms>
+                        </from>
+                        <to>
+                            <image>${dockerRepository}/${project.artifactId}:${project.version}</image>
+                        </to>
                     </configuration>
                 </plugin>
+
                 <plugin>
                     <groupId>org.jacoco</groupId>
                     <artifactId>jacoco-maven-plugin</artifactId>

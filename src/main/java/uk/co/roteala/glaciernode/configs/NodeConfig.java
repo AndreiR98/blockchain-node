@@ -1,14 +1,22 @@
 package uk.co.roteala.glaciernode.configs;
 
 import io.netty.channel.ChannelOption;
+import io.netty.handler.codec.MessageAggregator;
+import io.reactivex.rxjava3.functions.Consumer;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.DependsOn;
+import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
+import reactor.core.publisher.Sinks;
+import reactor.core.scheduler.Schedulers;
 import reactor.netty.tcp.TcpClient;
 import reactor.netty.tcp.TcpServer;
+import uk.co.roteala.common.messenger.Message;
+import uk.co.roteala.common.messenger.MessageTemplate;
+import uk.co.roteala.common.messenger.Messenger;
 import uk.co.roteala.common.monetary.MoveFund;
 import uk.co.roteala.common.storage.ColumnFamilyTypes;
 import uk.co.roteala.common.storage.StorageTypes;
@@ -18,6 +26,8 @@ import uk.co.roteala.exceptions.errorcodes.StorageErrorCode;
 import uk.co.roteala.glaciernode.handlers.BrokerTransmissionHandler;
 import uk.co.roteala.glaciernode.miner.MiningWorker;
 import uk.co.roteala.glaciernode.p2p.*;
+import uk.co.roteala.glaciernode.processor.BrokerMessageProcessor;
+import uk.co.roteala.glaciernode.processor.IncomingMessageSorter;
 import uk.co.roteala.glaciernode.storage.Storages;
 import uk.co.roteala.net.ConnectionsStorage;
 import uk.co.roteala.utils.Constants;
@@ -54,13 +64,52 @@ public class NodeConfig {
     }
 
     @Bean
+    public Sinks.Many<Message> incomingMessagesSink() {
+        return Sinks.many().multicast()
+                .onBackpressureBuffer();
+    }
+
+    @Bean
+    public Flux<Message> incomingMessagesFlux(Sinks.Many<Message> incomingMessagesSink) {
+        return incomingMessagesSink.asFlux();
+    }
+
+    @Bean
+    public Sinks.Many<MessageTemplate> outgoingMessageTemplateSink() {
+        return Sinks.many().multicast()
+                .onBackpressureBuffer();
+    }
+
+    @Bean
+    public Flux<MessageTemplate> outgoingMessageTemplateFlux(Sinks.Many<MessageTemplate> outgoingMessageTemplateSink) {
+        return outgoingMessageTemplateSink.asFlux();
+    }
+
+    @Bean
     public ConnectionsStorage connectionsStorage() {
         return new ConnectionsStorage();
     }
 
     @Bean
+    public Messenger messenger(ConnectionsStorage connectionsStorage, Flux<MessageTemplate> outgoingMessageTemplateFlux) {
+        Messenger messenger = new Messenger(connectionsStorage);
+        messenger.accept(outgoingMessageTemplateFlux);
+
+        return messenger;
+    }
+
+    @Bean
     public BrokerTransmissionHandler brokerTransmissionHandler() {
         return new BrokerTransmissionHandler();
+    }
+
+    @Bean
+    public BrokerMessageProcessor brokerMessageProcessor(Flux<Message> incomingMessagesFlux, AssemblerMessenger assemblerMessenger,
+                                                         Sinks.Many<MessageTemplate> messageTemplateSink) {
+        BrokerMessageProcessor processor = new BrokerMessageProcessor(assemblerMessenger, messageTemplateSink);
+        processor.accept(incomingMessagesFlux);
+
+        return processor;
     }
 
     @Bean
@@ -71,11 +120,6 @@ public class NodeConfig {
     @Bean
     public AssemblerMessenger messageAssembler() {
         return new AssemblerMessenger();
-    }
-
-    @Bean
-    public ExecutorMessenger executorMessenger() {
-        return new ExecutorMessenger();
     }
 
     //@Bean
