@@ -2,6 +2,7 @@ package uk.co.roteala.glaciernode.processor;
 
 import com.github.benmanes.caffeine.cache.Cache;
 import io.reactivex.rxjava3.functions.Consumer;
+import io.vertx.core.net.NetSocket;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -12,10 +13,11 @@ import reactor.core.scheduler.Schedulers;
 import uk.co.roteala.common.MempoolTransaction;
 import uk.co.roteala.common.messenger.*;
 import uk.co.roteala.common.storage.StorageTypes;
+import uk.co.roteala.glaciernode.client.ClientInitializer;
 import uk.co.roteala.glaciernode.p2p.AssemblerMessenger;
 import uk.co.roteala.glaciernode.p2p.ExecutorMessenger;
 import uk.co.roteala.glaciernode.storage.Storages;
-import uk.co.roteala.net.ConnectionsStorage;
+import uk.co.roteala.net.Peer;
 
 /**
  * Process messages coming from broker
@@ -27,8 +29,9 @@ import uk.co.roteala.net.ConnectionsStorage;
 public class BrokerMessageProcessor implements Consumer<Flux<Message>>{
     @Autowired
     private Storages storages;
+
     @Autowired
-    private Messenger messenger;
+    private ClientInitializer clientInitializer;
 
     private final AssemblerMessenger assemblerMessenger;
 
@@ -48,6 +51,22 @@ public class BrokerMessageProcessor implements Consumer<Flux<Message>>{
         switch (messageTemplate.getEventType()) {
             case MEMPOOL_TRANSACTION:
                 processMempoolEvent(messageTemplate);
+                break;
+            case PEERS:
+                processPeerEvent(messageTemplate);
+                break;
+        }
+    }
+
+    private void processPeerEvent(MessageTemplate messageTemplate) {
+        switch (messageTemplate.getEventAction()) {
+            case RESPONSE:
+                Response response = (Response) messageTemplate.getMessage();
+                final Peer peer = (Peer) response.getPayload();
+
+                clientInitializer.connect(peer);
+
+                break;
         }
     }
 
@@ -65,7 +84,7 @@ public class BrokerMessageProcessor implements Consumer<Flux<Message>>{
 
                     //Response to broker
                     messageTemplateSink.tryEmitNext(MessageTemplate.builder()
-                            .eventType(EventTypes.RESPONSE)
+                            .eventType(EventTypes.MEMPOOL_TRANSACTION)
                             .group(ReceivingGroup.BROKER)
                             .message(Response.builder()
                                     .location(mempoolTransaction.getHash())

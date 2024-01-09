@@ -1,4 +1,4 @@
-package uk.co.roteala.glaciernode.handlers;
+package uk.co.roteala.glaciernode.client;
 
 import io.vertx.core.AsyncResult;
 import io.vertx.core.Handler;
@@ -10,19 +10,19 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import reactor.core.publisher.Sinks;
 import uk.co.roteala.common.messenger.*;
+import uk.co.roteala.glaciernode.handlers.BrokerTransmissionHandler;
 import uk.co.roteala.net.ConnectionsStorage;
 
 import java.util.ArrayList;
 import java.util.List;
 
-
 /**
- * Handles the broker transmission incoming of messages are forwarded to the processor
+ * Handles connection events between client to server where node acts as client to other nodes
  * */
 @Slf4j
 @Component
 @RequiredArgsConstructor
-public class BrokerTransmissionHandler implements Handler<AsyncResult<NetSocket>> {
+public class ClientTransmissionHandler implements Handler<AsyncResult<NetSocket>> {
     @Autowired
     private ConnectionsStorage connectionStorage;
 
@@ -33,41 +33,32 @@ public class BrokerTransmissionHandler implements Handler<AsyncResult<NetSocket>
     private Sinks.Many<MessageTemplate> messageTemplateSink;
 
     private Buffer transmissionBuffer = Buffer.buffer();
-
-    /**
-     * Handles the successful or failed connection attempt to a broker.
-     * @param event The result of the connection attempt.
-     */
     @Override
     public void handle(AsyncResult<NetSocket> event) {
         if(event.succeeded()) {
             NetSocket netSocket = event.result();
-            this.connectionStorage.setBrokerConnection(netSocket);
-            log.info("Connection with broker: {} established!", netSocket.remoteAddress().hostAddress());
+            this.connectionStorage.getServerConnections().add(netSocket);
+            log.info("Connection with node: {} established!", netSocket.remoteAddress().hostAddress());
 
-            messageTemplateSink.tryEmitNext(MessageTemplate.builder()
-                            .eventAction(EventActions.REQUEST)
-                            .group(ReceivingGroup.BROKER)
-                            .eventType(EventTypes.PEERS)
-                    .build()
-            );
+            //Sent gossip or heart beat protocol
 
-            netSocket.handler(new HandleIncomingBrokerData()
+            netSocket.handler(new HandleIncomingPeerData()
                     .processWithConnection(netSocket));
             netSocket.closeHandler(close -> {
-                log.info("Connection with broker stopped!");
-                this.connectionStorage.setBrokerConnection(null);
+                log.info("Connection with node stopped!");
+                this.connectionStorage.getServerConnections()
+                        .remove(netSocket);
             });
         } else if (event.failed()) {
-            log.error("Failed to connect to broker!");
+            log.error("Failed to connect to node!");
         }
     }
 
-    private class HandleIncomingBrokerData implements Handler<Buffer> {
+    private class HandleIncomingPeerData implements Handler<Buffer> {
 
         private NetSocket connection;
 
-        public HandleIncomingBrokerData processWithConnection(NetSocket netSocket) {
+        public HandleIncomingPeerData processWithConnection(NetSocket netSocket) {
             this.connection = netSocket;
             return this;
         }
@@ -111,9 +102,9 @@ public class BrokerTransmissionHandler implements Handler<AsyncResult<NetSocket>
             for (Integer delimiterPos : delimiters) {
                 String partition = content.substring(lowerBound, delimiterPos);
                 Message message = MessengerUtils.deserialize(partition);
+                message.setOwner(this.connection);
 
                 if (message != null) {
-                    message.setOwner(this.connection);
                     message.setHandler(HandlerType.BROKER);
                     sink.tryEmitNext(message);
                 }
@@ -144,10 +135,10 @@ public class BrokerTransmissionHandler implements Handler<AsyncResult<NetSocket>
         }
 
         private synchronized Message processSingle(Buffer buffer) {
-                int delimiterPosition = buffer.toString().indexOf(MessengerUtils.delimiter);
-                String wrapperString = buffer.getString(0, delimiterPosition);
+            int delimiterPosition = buffer.toString().indexOf(MessengerUtils.delimiter);
+            String wrapperString = buffer.getString(0, delimiterPosition);
 
-                return MessengerUtils.deserialize(wrapperString);
+            return MessengerUtils.deserialize(wrapperString);
         }
     }
 }

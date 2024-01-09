@@ -3,6 +3,7 @@ package uk.co.roteala.glaciernode.configs;
 import io.netty.channel.ChannelOption;
 import io.netty.handler.codec.MessageAggregator;
 import io.reactivex.rxjava3.functions.Consumer;
+import io.vertx.core.Vertx;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.annotation.Bean;
@@ -23,6 +24,7 @@ import uk.co.roteala.common.storage.StorageTypes;
 import uk.co.roteala.core.Blockchain;
 import uk.co.roteala.exceptions.StorageException;
 import uk.co.roteala.exceptions.errorcodes.StorageErrorCode;
+import uk.co.roteala.glaciernode.client.ClientTransmissionHandler;
 import uk.co.roteala.glaciernode.handlers.BrokerTransmissionHandler;
 import uk.co.roteala.glaciernode.miner.MiningWorker;
 import uk.co.roteala.glaciernode.p2p.*;
@@ -64,6 +66,11 @@ public class NodeConfig {
     }
 
     @Bean
+    public Vertx vertx() {
+        return Vertx.vertx();
+    }
+
+    @Bean
     public Sinks.Many<Message> incomingMessagesSink() {
         return Sinks.many().multicast()
                 .onBackpressureBuffer();
@@ -101,6 +108,11 @@ public class NodeConfig {
     @Bean
     public BrokerTransmissionHandler brokerTransmissionHandler() {
         return new BrokerTransmissionHandler();
+    }
+
+    @Bean
+    public ClientTransmissionHandler clientTransmissionHandler() {
+        return new ClientTransmissionHandler();
     }
 
     @Bean

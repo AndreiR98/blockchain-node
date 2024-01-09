@@ -90,6 +90,7 @@ public class Storages  {
             List<String> stateTrieColumns = new ArrayList<>();
             stateTrieColumns.add(ColumnFamilyTypes.STATE.getName());
             stateTrieColumns.add(ColumnFamilyTypes.ACCOUNTS.getName());
+            stateTrieColumns.add(ColumnFamilyTypes.NODE.getName());
 
             List<ColumnFamilyDescriptor> columnFamilyDescriptors = DefaultStorage
                     .setupColumnFamilyDescriptors(columnFamilyOptions, stateTrieColumns);

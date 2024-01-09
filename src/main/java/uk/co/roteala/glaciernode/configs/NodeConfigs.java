@@ -50,4 +50,6 @@ public class NodeConfigs {
     private String minerPrivateKey;
 
     private String nodeServerIP;
+
+    public static int DEFAULT_CONNECTION_ALLOWED = 5;
 }
