@@ -1,4 +1,4 @@
-package uk.co.roteala.glaciernode.p2p;
+package uk.co.roteala.glaciernode.storage;
 
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;

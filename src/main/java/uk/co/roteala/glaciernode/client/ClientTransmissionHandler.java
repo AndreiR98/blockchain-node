@@ -10,7 +10,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import reactor.core.publisher.Sinks;
 import uk.co.roteala.common.messenger.*;
-import uk.co.roteala.glaciernode.handlers.BrokerTransmissionHandler;
 import uk.co.roteala.net.ConnectionsStorage;
 
 import java.util.ArrayList;
@@ -29,16 +28,14 @@ public class ClientTransmissionHandler implements Handler<AsyncResult<NetSocket>
     @Autowired
     private Sinks.Many<Message> sink;
 
-    @Autowired
-    private Sinks.Many<MessageTemplate> messageTemplateSink;
-
     private Buffer transmissionBuffer = Buffer.buffer();
     @Override
     public void handle(AsyncResult<NetSocket> event) {
         if(event.succeeded()) {
             NetSocket netSocket = event.result();
-            this.connectionStorage.getServerConnections().add(netSocket);
-            log.info("Connection with node: {} established!", netSocket.remoteAddress().hostAddress());
+            this.connectionStorage.getAsClientConnections().add(netSocket);
+
+            log.info("Connection with node-server: {} established!", netSocket.remoteAddress().hostAddress());
 
             //Sent gossip or heart beat protocol
 
@@ -46,8 +43,8 @@ public class ClientTransmissionHandler implements Handler<AsyncResult<NetSocket>
                     .processWithConnection(netSocket));
             netSocket.closeHandler(close -> {
                 log.info("Connection with node stopped!");
-                this.connectionStorage.getServerConnections()
-                        .remove(netSocket);
+                this.connectionStorage.getAsClientConnections()
+                        .remove(netSocket.remoteAddress().hostAddress());
             });
         } else if (event.failed()) {
             log.error("Failed to connect to node!");
@@ -105,7 +102,7 @@ public class ClientTransmissionHandler implements Handler<AsyncResult<NetSocket>
                 message.setOwner(this.connection);
 
                 if (message != null) {
-                    message.setHandler(HandlerType.BROKER);
+                    message.setHandler(HandlerType.CLIENT);
                     sink.tryEmitNext(message);
                 }
                 lowerBound = delimiterPos + 1;

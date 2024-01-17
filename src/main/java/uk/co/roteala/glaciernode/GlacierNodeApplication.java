@@ -4,12 +4,9 @@ import io.vertx.core.Vertx;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
-import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.ApplicationListener;
 import org.springframework.context.annotation.Bean;
-import uk.co.roteala.glaciernode.client.ClientInitializer;
-import uk.co.roteala.glaciernode.configs.NodeConfigs;
-import uk.co.roteala.glaciernode.services.ServerInitializer;
+import uk.co.roteala.glaciernode.server.ServerInitializer;
 
 @SpringBootApplication
 public class GlacierNodeApplication {

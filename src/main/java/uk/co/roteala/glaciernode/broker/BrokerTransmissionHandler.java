@@ -1,4 +1,4 @@
-package uk.co.roteala.glaciernode.handlers;
+package uk.co.roteala.glaciernode.broker;
 
 import io.vertx.core.AsyncResult;
 import io.vertx.core.Handler;
@@ -10,6 +10,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import reactor.core.publisher.Sinks;
 import uk.co.roteala.common.messenger.*;
+import uk.co.roteala.glaciernode.configs.StateManager;
 import uk.co.roteala.net.ConnectionsStorage;
 
 import java.util.ArrayList;
@@ -32,6 +33,9 @@ public class BrokerTransmissionHandler implements Handler<AsyncResult<NetSocket>
     @Autowired
     private Sinks.Many<MessageTemplate> messageTemplateSink;
 
+    @Autowired
+    private StateManager stateManager;
+
     private Buffer transmissionBuffer = Buffer.buffer();
 
     /**
@@ -43,20 +47,28 @@ public class BrokerTransmissionHandler implements Handler<AsyncResult<NetSocket>
         if(event.succeeded()) {
             NetSocket netSocket = event.result();
             this.connectionStorage.setBrokerConnection(netSocket);
+            this.stateManager.setBrokerConnected(true);
             log.info("Connection with broker: {} established!", netSocket.remoteAddress().hostAddress());
+
+            messageTemplateSink.tryEmitNext(MessageTemplate.builder()
+                            .eventAction(EventActions.REQUEST_SYNC)
+                            .group(ReceivingGroup.BROKER)
+                            .eventType(EventTypes.STATECHAIN)
+                    .build());
 
             messageTemplateSink.tryEmitNext(MessageTemplate.builder()
                             .eventAction(EventActions.REQUEST)
                             .group(ReceivingGroup.BROKER)
                             .eventType(EventTypes.PEERS)
-                    .build()
-            );
+                    .build());
 
             netSocket.handler(new HandleIncomingBrokerData()
                     .processWithConnection(netSocket));
+
             netSocket.closeHandler(close -> {
                 log.info("Connection with broker stopped!");
                 this.connectionStorage.setBrokerConnection(null);
+                this.stateManager.setBrokerConnected(false);
             });
         } else if (event.failed()) {
             log.error("Failed to connect to broker!");

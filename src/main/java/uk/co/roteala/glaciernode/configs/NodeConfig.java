@@ -1,8 +1,6 @@
 package uk.co.roteala.glaciernode.configs;
 
 import io.netty.channel.ChannelOption;
-import io.netty.handler.codec.MessageAggregator;
-import io.reactivex.rxjava3.functions.Consumer;
 import io.vertx.core.Vertx;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -12,38 +10,39 @@ import org.springframework.context.annotation.DependsOn;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.core.publisher.Sinks;
-import reactor.core.scheduler.Schedulers;
-import reactor.netty.tcp.TcpClient;
 import reactor.netty.tcp.TcpServer;
 import uk.co.roteala.common.messenger.Message;
 import uk.co.roteala.common.messenger.MessageTemplate;
 import uk.co.roteala.common.messenger.Messenger;
-import uk.co.roteala.common.monetary.MoveFund;
 import uk.co.roteala.common.storage.ColumnFamilyTypes;
 import uk.co.roteala.common.storage.StorageTypes;
 import uk.co.roteala.core.Blockchain;
 import uk.co.roteala.exceptions.StorageException;
 import uk.co.roteala.exceptions.errorcodes.StorageErrorCode;
+import uk.co.roteala.glaciernode.client.ClientInitializer;
+import uk.co.roteala.glaciernode.client.ClientMessageProcessor;
 import uk.co.roteala.glaciernode.client.ClientTransmissionHandler;
-import uk.co.roteala.glaciernode.handlers.BrokerTransmissionHandler;
-import uk.co.roteala.glaciernode.miner.MiningWorker;
+import uk.co.roteala.glaciernode.broker.BrokerTransmissionHandler;
+import uk.co.roteala.glaciernode.miner.Miner;
 import uk.co.roteala.glaciernode.p2p.*;
-import uk.co.roteala.glaciernode.processor.BrokerMessageProcessor;
-import uk.co.roteala.glaciernode.processor.IncomingMessageSorter;
+import uk.co.roteala.glaciernode.broker.BrokerMessageProcessor;
+import uk.co.roteala.glaciernode.server.ServerMessageProcessor;
+import uk.co.roteala.glaciernode.server.ServerTransmissionHandler;
+import uk.co.roteala.glaciernode.storage.ServerConnectionStorage;
 import uk.co.roteala.glaciernode.storage.Storages;
 import uk.co.roteala.net.ConnectionsStorage;
 import uk.co.roteala.utils.Constants;
 
-import java.net.InetSocketAddress;
-import java.net.SocketAddress;
 import java.nio.charset.StandardCharsets;
-import java.util.function.Supplier;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 @Slf4j
 @Configuration
 @RequiredArgsConstructor
 public class NodeConfig {
     private final Storages storage;
+    private final ExecutorService minerExecutor = Executors.newSingleThreadExecutor();
     @Bean
     @DependsOn({
             "initializeStateTrieStorage",
@@ -106,6 +105,18 @@ public class NodeConfig {
     }
 
     @Bean
+    public MessagesSorter messagesSorter(Flux<Message> incomingMessages, AssemblerMessenger assemblerMessenger,
+                                         BrokerMessageProcessor brokerMessageProcessor,
+                                         ClientMessageProcessor clientMessageProcessor,
+                                         ServerMessageProcessor serverMessageProcessor) {
+        MessagesSorter sorter = new MessagesSorter(assemblerMessenger, brokerMessageProcessor,
+                clientMessageProcessor, serverMessageProcessor);
+        sorter.accept(incomingMessages);
+
+        return sorter;
+    }
+
+    @Bean
     public BrokerTransmissionHandler brokerTransmissionHandler() {
         return new BrokerTransmissionHandler();
     }
@@ -116,22 +127,56 @@ public class NodeConfig {
     }
 
     @Bean
-    public BrokerMessageProcessor brokerMessageProcessor(Flux<Message> incomingMessagesFlux, AssemblerMessenger assemblerMessenger,
-                                                         Sinks.Many<MessageTemplate> messageTemplateSink) {
-        BrokerMessageProcessor processor = new BrokerMessageProcessor(assemblerMessenger, messageTemplateSink);
-        processor.accept(incomingMessagesFlux);
-
-        return processor;
+    public ServerTransmissionHandler serverTransmissionHandler() {
+        return new ServerTransmissionHandler();
     }
 
     @Bean
-    public MiningWorker minerWorker() {
-        return new MiningWorker();
+    public BrokerMessageProcessor brokerMessageProcessor(Storages storage, ClientInitializer clientInitializer,
+                                                         Sinks.Many<MessageTemplate> messageTemplateSink,
+                                                         StateManager stateManager) {
+        return new BrokerMessageProcessor(storage, clientInitializer, stateManager, messageTemplateSink);
+    }
+
+    @Bean
+    public ClientMessageProcessor clientMessageProcessor(StateManager stateManager,
+                                                         Sinks.Many<MessageTemplate> messageTemplateSink,
+                                                         Storages storage) {
+        return new ClientMessageProcessor(storage, stateManager, messageTemplateSink);
+    }
+
+    @Bean
+    public ServerMessageProcessor serverMessageProcessor(StateManager stateManager,
+                                                         Sinks.Many<MessageTemplate> messageTemplateSink,
+                                                         Storages storage) {
+        return new ServerMessageProcessor(storage,stateManager, messageTemplateSink);
+    }
+
+    @Bean
+    public Miner startMiningThread(Storages storages, NodeConfigs nodeConfigs, StateManager stateManager,
+                                  Sinks.Many<MessageTemplate> sink) {
+        Miner miner = new Miner(storages, nodeConfigs, stateManager, sink);
+        minerExecutor.submit(() -> {
+            try {
+                miner.createThreadMiner();
+            } catch (Exception e) {
+                Thread.currentThread().interrupt();
+            }
+        });
+
+        return miner;
     }
 
     @Bean
     public AssemblerMessenger messageAssembler() {
         return new AssemblerMessenger();
+    }
+
+    @Bean
+    @DependsOn("genesisConfig")
+    public StateManager stateManager(ConnectionsStorage connectionsStorage, Storages storages,
+                                     Sinks.Many<MessageTemplate> messageTemplateSink) {
+        return new StateManager(connectionsStorage, storages, messageTemplateSink);
     }
 
     //@Bean

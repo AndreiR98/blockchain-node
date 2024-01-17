@@ -1,226 +1,165 @@
 package uk.co.roteala.glaciernode.miner;
 
-import io.netty.buffer.ByteBuf;
-import io.netty.buffer.Unpooled;
-import lombok.*;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.SerializationUtils;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.context.annotation.Bean;
-import org.springframework.context.annotation.Configuration;
-import reactor.core.publisher.Flux;
-import reactor.core.publisher.Mono;
-import reactor.netty.ByteBufFlux;
-import reactor.netty.Connection;
+import org.springframework.stereotype.Component;
+import reactor.core.publisher.Sinks;
 import uk.co.roteala.common.*;
-import uk.co.roteala.common.events.*;
-import uk.co.roteala.common.monetary.Coin;
+import uk.co.roteala.common.messenger.*;
+import uk.co.roteala.common.storage.ColumnFamilyTypes;
+import uk.co.roteala.common.storage.Operator;
+import uk.co.roteala.common.storage.SearchField;
+import uk.co.roteala.common.storage.StorageTypes;
 import uk.co.roteala.exceptions.MiningException;
 import uk.co.roteala.exceptions.errorcodes.MiningErrorCode;
-import uk.co.roteala.glaciernode.p2p.BrokerConnectionStorage;
-import uk.co.roteala.glaciernode.p2p.ClientConnectionStorage;
-import uk.co.roteala.glaciernode.p2p.ServerConnectionStorage;
-import uk.co.roteala.glaciernode.storage.StorageServices;
+import uk.co.roteala.glaciernode.configs.NodeConfigs;
+import uk.co.roteala.glaciernode.configs.StateManager;
 import uk.co.roteala.glaciernode.storage.Storages;
-import uk.co.roteala.net.ConnectionsStorage;
 import uk.co.roteala.security.ECKey;
-import uk.co.roteala.security.utils.CryptographyUtils;
 import uk.co.roteala.utils.BlockchainUtils;
+import uk.co.roteala.utils.Constants;
 
-
-import javax.annotation.PreDestroy;
-import java.math.BigDecimal;
 import java.math.BigInteger;
-
-import java.nio.ByteBuffer;
-import java.util.*;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
+import java.nio.charset.StandardCharsets;
+import java.time.Instant;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 @Slf4j
-@Configuration
-public class Miner implements Mining {
+@Component
+@RequiredArgsConstructor
+public class Miner {
 
-    @Autowired
-    private Storages storages;
-    //private final Processor processor;
-
-    @Value("${roteala.blockchain.miner-private-key}")
-    private String minerPrivateKey;
-
-    @Value("${roteala.blockchain.is-mining}")
-    private boolean isMining;
-
-    @Autowired
-    private MiningWorker miningWorker;
-
-    @Autowired
-    private ConnectionsStorage connectionStorage;
+    private final Storages storages;
+    private final NodeConfigs nodeConfigs;
+    private final StateManager stateManager;
+    private final Sinks.Many<MessageTemplate> messageTemplateSink;
 
     private BigInteger nonce = BigInteger.ZERO;
-    private long startTime = 0;
+    private Instant startTime = Instant.now();
     private ECKey privateKey;
+    private final AtomicBoolean isWorking = new AtomicBoolean(false);
 
-    private boolean isWorking = false;
+    public Miner createThreadMiner() throws InterruptedException {
+        this.privateKey = new ECKey(this.nodeConfigs.getMinerPrivateKey());
+        AtomicBoolean isPaused = this.stateManager.getPauseMining();
 
-    @Override
-    public void start() {
-        this.isMining = true;
-    }
+        while (true) {
+            if (!stateManager.allowMinerToWork()) {
+                Thread.sleep(3000); // Sleep for 3 seconds before the next iteration
+                continue;
+            } else {
+                if(this.stateManager.getPauseMining().get()) {
+                    Thread.sleep(3000);
+                    continue;
+                }
 
-    @Override
-    public void stop() {
-        this.isMining = false;
-    }
+                if(!this.stateManager.getPauseMining().get()) {
+                    List<MempoolTransaction> transactions = fetchMempoolTransactions();
 
-    //Run the miner
-    @Override
-    @Bean
-    public void work() {
-        try {
-            this.privateKey =  new ECKey(minerPrivateKey);
+                    if(!isWorking.get()) {
+                        setupMining();
+                    }
 
-            while(true) {
-                boolean miningWithTransactions = false; // Flag to indicate if mining with transactions
-
-                ChainState state = storage.getStateTrie();
-                if (shouldStartMining()) {
-                    if (!this.miningWorker.isPauseMining()) {
-                        if (!this.isWorking) {
-                            setupMining();
-                            miningWithTransactions = false;
-
-                            if(!this.storage.getPseudoTransactionGrouped(System.currentTimeMillis()).isEmpty()) {
-                                resetMining();
-                                miningWithTransactions = true;
-
-                                //groupedTransactions = this.storage.getPseudoTransactionGrouped(this.startTime);
-                            }
+                    //Check if the blockchain allows empty blocks mining
+                    if(this.stateManager.getChainState().isAllowEmptyMining()) {
+                        if(transactions.isEmpty()) {
+                            mineEmptyBlock();
+                        } else {
+                            mineBlock(transactions);
                         }
-
-
-                        if(!this.storage.getPseudoTransactionGrouped(this.startTime).isEmpty() || (state.isAllowEmptyMining() && !miningWithTransactions)) {
-                            mineBlock(this.storage.getPseudoTransactionGrouped(this.startTime), state);
-                            miningWithTransactions = true; // Set the flag if mining with transactions
+                    } else {
+                        if(transactions.isEmpty()) {
+                            resetMining();
+                            Thread.sleep(3000);
+                        } else {
+                            mineBlock(transactions);
                         }
                     }
-                } else {
-                    this.isWorking = false;
-                    Thread.sleep(3000);
                 }
 
-                if (this.nonce.compareTo(new BigInteger("ffffffff", 16)) > 0) {
-                    resetMining(); // Fix the time after reaching max nonce
-                    miningWithTransactions = false;
+                if (nonce.compareTo(new BigInteger("ffffffff", 16)) > 0) {
+                    resetMining();
+                    isWorking.set(false); // Set the flag indicating that the miner is no longer working
                 }
             }
-        } catch (Exception e) {
-            log.error("Error while mining:{}", e);
         }
     }
 
-    /**
-     * When deploying to larger environments add check for children and parents
-     * */
-    private boolean shouldStartMining() {
-        ChainState state = storage.getStateTrie();
+    private List<MempoolTransaction> fetchMempoolTransactions() {
+        Object fetched =  storages.getStorage(StorageTypes.MEMPOOL)
+                .withCriteria(Operator.LTEQ, startTime.toEpochMilli(), SearchField.TIME_STAMP)
+                .withHandler(ColumnFamilyTypes.TRANSACTIONS)
+                .reversed(false)
+                .page(100)
+                .asBasicModel();
 
-        if(state != null) {
-            if(state.isAllowEmptyMining()) {
-                return this.miningWorker.isBrokerConnected()
-                        && miningWorker.isHasDataSync()
-                        //&& miningWorker.isHasChildren()
-                        && miningWorker.isHasStateSync();
-            }
+        List<MempoolTransaction> transactions = (List<MempoolTransaction>) fetched;
+        log.info("Transactions: {}", transactions);
 
-            return miningWorker.isBrokerConnected()
-                    && miningWorker.isHasDataSync()
-                    //&& (miningWorker.isHasParents() || miningWorker.isHasChildren())
-                    && miningWorker.isHasStateSync();
-        }
-
-        return false;
+        return transactions;
     }
 
-    private void mineBlock(List<PseudoTransaction> availablePseudoTransaction, ChainState state) {
+    private void mineBlock(List<MempoolTransaction> mempoolTransactions) {
+        Block newBlock;
+        Integer difficulty = stateManager.getChainState().getTarget();
+        Block prevBlock = getPreviousBlock();
 
-        BlockMetadata newBlock;
+        isWorking.set(true);
+        lockTransactions(mempoolTransactions);
+        newBlock = generateBlock(prevBlock.getHash(), prevBlock.getHeader().getIndex(), mempoolTransactions);
 
-        Coin reward = state.getReward();
-        Integer difficulty = state.getTarget();
-
-        Block prevBlock = (state.getLastBlockIndex()) <= 0 ? state.getGenesisBlock()
-                : storage.getBlockByIndex(state.getLastBlockIndex());
-
-        if (!availablePseudoTransaction.isEmpty() || state.isAllowEmptyMining()) {
-            this.isWorking = true;
-            lockTransactions(availablePseudoTransaction);
-            newBlock = generateBlock(reward, difficulty, prevBlock.getHash(), prevBlock.getHeader().getIndex(), availablePseudoTransaction);
-        } else {
-            newBlock = null;
+        if (newBlock != null && (BlockchainUtils.computedTargetValue(newBlock.getHash(), difficulty))) {
+            stateManager.getPauseMining().set(true);
+            processMinedBlock(newBlock);
+            return;
         }
 
-        log.info("Working on:{}-{}-{}", newBlock.getBlock().getHash(), newBlock.getBlock().getHeader().getNonce(), newBlock.getBlock().getHeader().getMarkleRoot());
+        nonce = nonce.add(BigInteger.ONE);
+    }
 
-        if(newBlock != null && (BlockchainUtils.computedTargetValue(newBlock.getBlock().getHash(), difficulty))) {
-                this.miningWorker.setPauseMining(true);
-                processMinedBlock(newBlock);
-                log.info("Block:{}", newBlock);
-                log.info("====== STOP MINING =====");
-                resetMining();
-
-        }
-
-        this.nonce = this.nonce.add(BigInteger.ONE);
+    private Block getPreviousBlock() {
+        return (stateManager.getChainState().getLastBlockIndex()) <= 0 ? Constants.GENESIS_BLOCK
+                : (Block) storages.getStorage(StorageTypes.BLOCKCHAIN)
+                .get(ColumnFamilyTypes.BLOCKS, stateManager.getChainState().getLastBlockIndex().toString()
+                        .getBytes(StandardCharsets.UTF_8));
     }
 
     private void setupMining() {
-        log.info("===== START MINER ======");
-        this.isMining = true;
-        this.nonce = BigInteger.ZERO;
-
-        this.startTime = System.currentTimeMillis();
+        nonce = BigInteger.ZERO;
+        startTime = Instant.now();
     }
 
     private void resetMining() {
-        log.info("===== START MINING NEW BLOCK ======");
-        this.nonce = BigInteger.ZERO;
-        this.startTime = System.currentTimeMillis();
+        nonce = BigInteger.ZERO;
+        startTime = Instant.now();
     }
 
-    /**
-     * Generate an empty block without any transaction
-     * */
-    private BlockMetadata generateBlock(Coin reward, Integer target, String previousHash, Integer index, List<PseudoTransaction> pseudoTransactions) {
-
+    private Block generateBlock(String previousHash, Integer index, List<MempoolTransaction> mempoolTransactions) {
         final int blockIndex = (index + 1);
 
-        List<String> pseudoHashes = new ArrayList<>();
         List<String> transactionHashes = new ArrayList<>();
 
         BlockHeader blockHeader = new BlockHeader();
-        blockHeader.setReward(reward);
-        blockHeader.setMinerAddress(this.privateKey.getPublicKey().toAddress());
-        blockHeader.setDifficulty(target);
-        blockHeader.setNonce(this.nonce.toString(16));
-
+        blockHeader.setMinerAddress(privateKey.getPublicKey().toAddress());
+        blockHeader.setDifficulty(stateManager.getChainState().getTarget());
+        blockHeader.setNonce(nonce.toString(16));
         blockHeader.setPreviousHash(previousHash);
         blockHeader.setVersion(0x16);
         blockHeader.setIndex(blockIndex);
-        blockHeader.setTimeStamp(this.startTime);
+        blockHeader.setTimeStamp(startTime.toEpochMilli());
         blockHeader.setBlockTime(System.currentTimeMillis());
 
-        if(!pseudoTransactions.isEmpty()){
+        Block block = new Block();
+        block.setHeader(blockHeader);
+
+        if (!mempoolTransactions.isEmpty()) {
             int transactionIndex = 0;
-            for(PseudoTransaction pseudoTransaction : pseudoTransactions) {
-
-
-                Transaction transaction = BlockchainUtils
-                        .mapPsuedoTransactionToTransaction(pseudoTransaction, blockHeader, transactionIndex);
-
-                pseudoHashes.add(pseudoTransaction.getPseudoHash());
-                transactionHashes.add(transaction.getHash());
+            for (MempoolTransaction mempoolTransaction : mempoolTransactions) {
+                mempoolTransaction.toTransaction(block, transactionIndex);
+                transactionHashes.add(mempoolTransaction.getHash());
 
                 transactionIndex++;
             }
@@ -230,126 +169,93 @@ public class Miner implements Mining {
             blockHeader.setNumberOfTransactions(0);
         }
 
+        String markleRoot = Constants.DEFAULT_HASH;
 
-        String markleRoot = "0000000000000000000000000000000000000000000000000000000000000000";
-
-        if(BlockchainUtils.markleRootGenerator(transactionHashes) != null) {
+        if (BlockchainUtils.markleRootGenerator(transactionHashes) != null) {
             markleRoot = BlockchainUtils.markleRootGenerator(transactionHashes);
         }
 
-
         blockHeader.setMarkleRoot(markleRoot);
         blockHeader.setHash();
-
-        Block block = new Block();
         block.setTransactions(transactionHashes);
         block.setConfirmations(1);
-        block.setForkHash("0000000000000000000000000000000000000000000000000000000000000000");
-        block.setHeader(blockHeader);
+        block.setForkHash(Constants.DEFAULT_HASH);
         block.setStatus(BlockStatus.MINED);
         block.setNumberOfBits(SerializationUtils.serialize(block).length);
-        block.setTransactions(pseudoHashes);
+        block.setTransactions(transactionHashes);
 
-        return new BlockMetadata(block, pseudoHashes, transactionHashes);
+        return block;
     }
 
-    /**
-     * Generate block containing transactions
-     * */
-    private BlockMetadata generateEmptyBlock(Coin reward, Integer target, String previousHash, Integer index) {
+    private void mineEmptyBlock() {
+        isWorking.set(true);
+        Integer difficulty = stateManager.getChainState().getTarget();
+        Block prevBlock = getPreviousBlock();
 
         BlockHeader blockHeader = new BlockHeader();
-        blockHeader.setReward(reward);
-        blockHeader.setMinerAddress(this.privateKey.getPublicKey().toAddress());
-        blockHeader.setDifficulty(target);
-        blockHeader.setNonce(this.nonce.toString(16));
+        blockHeader.setMinerAddress(privateKey.getPublicKey().toAddress());
+        blockHeader.setDifficulty(difficulty);
+        blockHeader.setNonce(nonce.toString(16));
         blockHeader.setNumberOfTransactions(0);
-        blockHeader.setPreviousHash(previousHash);
+        blockHeader.setPreviousHash(prevBlock.getHash());
         blockHeader.setVersion(0x16);
-        blockHeader.setIndex(index + 1);
-        blockHeader.setTimeStamp(this.startTime);
+        blockHeader.setIndex(prevBlock.getHeader().getIndex() + 1);
+        blockHeader.setTimeStamp(startTime.toEpochMilli());
         blockHeader.setBlockTime(System.currentTimeMillis());
-        blockHeader.setMarkleRoot("0000000000000000000000000000000000000000000000000000000000000000");
+        blockHeader.setMarkleRoot(Constants.DEFAULT_HASH);
         blockHeader.setHash();
 
         Block block = new Block();
         block.setTransactions(new ArrayList<>());
         block.setConfirmations(1);
-        block.setForkHash("0000000000000000000000000000000000000000000000000000000000000000");
+        block.setForkHash(Constants.DEFAULT_HASH);
         block.setHeader(blockHeader);
         block.setStatus(BlockStatus.MINED);
         block.setNumberOfBits(SerializationUtils.serialize(block).length);
 
-        return new BlockMetadata(block, null, null);
+        if (block != null && (BlockchainUtils.computedTargetValue(block.getHash(), difficulty))) {
+            stateManager.getPauseMining().set(true);
+            processMinedBlock(block);
+            return;
+        }
+
+        nonce = nonce.add(BigInteger.ONE);
     }
 
-
-
-    /**
-     * Process the mined block
-     * Send it to other peers for confirmation and to the broker
-     * Add it to the memory pool while waiting
-     * */
-    private void processMinedBlock(BlockMetadata newBlock) {
+    private void processMinedBlock(Block newBlock) {
         try {
-            this.miningWorker.setPauseMining(true);
+            stateManager.getPauseMining().set(true);
 
-            MessageWrapper blockHeaderWrapper = new MessageWrapper();
-            blockHeaderWrapper.setType(MessageTypes.BLOCKHEADER);
-            blockHeaderWrapper.setAction(MessageActions.MINED_BLOCK);
-            blockHeaderWrapper.setContent(newBlock.getBlock().getHeader());
-
-            Block block = newBlock.getBlock();
-
-            if(storage.getPseudoBlockByHash(block.getHash()) != null) {
-                throw new MiningException(MiningErrorCode.ALREADY_EXISTS);
+            if (storages.getStorage(StorageTypes.BLOCKCHAIN).has(ColumnFamilyTypes.BLOCKS, newBlock.getKey())) {
+                throw new MiningException(MiningErrorCode.BLOCK_NOT_FOUND);
             }
 
-            storage.addBlockMempool(block.getHash(), block);
-            log.info("Newly mined block added to the storage:{}", block);
+            storages.getStorage(StorageTypes.MEMPOOL)
+                    .putIfAbsent(true, ColumnFamilyTypes.BLOCKS, newBlock.getKey(), newBlock);
+            log.info("Newly mined block added to the storage:{}", newBlock);
 
-            //Send it to the broker
-            brokerConnectionStorage.getConnection()
-                    .outbound().sendObject(Mono.just(blockHeaderWrapper.serialize()))
-                    .then().subscribe();
-
-            List<Connection> clientConnections = this.clientConnectionStorage.getClientConnections();
-
-            for(Connection connection : clientConnections) {
-                connection.outbound()
-                        .sendObject(Mono.just(blockHeaderWrapper.serialize()))
-                        .then().subscribe();
-            }
-
-            List<Connection> serverConnections = this.serverConnectionStorage.getServerConnections();
-
-            for(Connection connection : serverConnections) {
-                connection.outbound()
-                        .sendObject(Mono.just(blockHeaderWrapper.serialize()))
-                        .then().subscribe();
-            }
+            messageTemplateSink.tryEmitNext(MessageTemplate.builder()
+                    .message(newBlock)
+                    .eventAction(EventActions.MINED_BLOCK)
+                    .withOut(null)
+                    .group(ReceivingGroup.ALL)
+                    .eventType(EventTypes.BLOCK)
+                    .build());
         } catch (Exception e) {
             log.error("Error on processing block:{}", e.getMessage());
         }
     }
 
-    private void lockTransactions(List<PseudoTransaction> pseudoTransactions) {
+    private void lockTransactions(List<MempoolTransaction> mempoolTransactions) {
         try {
-            for(PseudoTransaction pseudoTransaction : pseudoTransactions) {
-                pseudoTransaction.setStatus(TransactionStatus.LOCKED);
+            for (MempoolTransaction mempoolTransaction : mempoolTransactions) {
+                mempoolTransaction.setStatus(TransactionStatus.LOCKED);
 
-                this.storage.addMempool(pseudoTransaction.getPseudoHash(), pseudoTransaction);
+                storages.getStorage(StorageTypes.MEMPOOL)
+                        .modify(ColumnFamilyTypes.TRANSACTIONS, mempoolTransaction.getKey(), mempoolTransaction);
             }
         } catch (Exception e) {
-            log.error("Error while locking transactions:{}",e.toString());
+            log.error("Error while locking transactions:{}", e.toString());
         }
-    }
-
-    @Data
-    @AllArgsConstructor
-    private class BlockMetadata {
-        private Block block;
-        private List<String> mempoolTransaction;
-        private List<String> transactionHashes;
     }
 }

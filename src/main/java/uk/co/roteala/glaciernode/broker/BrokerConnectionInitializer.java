@@ -1,22 +1,12 @@
-package uk.co.roteala.glaciernode.configs;
+package uk.co.roteala.glaciernode.broker;
 
-import io.netty.channel.ChannelOption;
 import io.vertx.core.Vertx;
 import io.vertx.core.net.NetClient;
 import io.vertx.core.net.NetClientOptions;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.context.ApplicationListener;
 import org.springframework.context.annotation.Bean;
-import org.springframework.context.event.ContextRefreshedEvent;
 import org.springframework.stereotype.Component;
-import reactor.netty.tcp.TcpClient;
-import reactor.netty.tcp.TcpServer;
-import uk.co.roteala.common.messenger.MessengerUtils;
-import uk.co.roteala.glaciernode.handlers.BrokerTransmissionHandler;
-import uk.co.roteala.glaciernode.storage.Storages;
-import uk.co.roteala.net.ConnectionsStorage;
 
 @Slf4j
 @Component
