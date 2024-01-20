@@ -134,8 +134,8 @@ public class NodeConfig {
     @Bean
     public BrokerMessageProcessor brokerMessageProcessor(Storages storage, ClientInitializer clientInitializer,
                                                          Sinks.Many<MessageTemplate> messageTemplateSink,
-                                                         StateManager stateManager) {
-        return new BrokerMessageProcessor(storage, clientInitializer, stateManager, messageTemplateSink);
+                                                         StateManager stateManager, Miner miner) {
+        return new BrokerMessageProcessor(storage, clientInitializer, stateManager, messageTemplateSink, miner);
     }
 
     @Bean

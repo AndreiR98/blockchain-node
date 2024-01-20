@@ -14,6 +14,7 @@ import uk.co.roteala.common.storage.ColumnFamilyTypes;
 import uk.co.roteala.common.storage.StorageTypes;
 import uk.co.roteala.glaciernode.client.ClientInitializer;
 import uk.co.roteala.glaciernode.configs.StateManager;
+import uk.co.roteala.glaciernode.miner.Miner;
 import uk.co.roteala.glaciernode.p2p.AssemblerMessenger;
 import uk.co.roteala.glaciernode.storage.Storages;
 import uk.co.roteala.utils.BlockchainUtils;
@@ -37,6 +38,8 @@ public class BrokerMessageProcessor implements Consumer<Mono<MessageTemplate>> {
     private final StateManager manager;
 
     private final Sinks.Many<MessageTemplate> messageTemplateSink;
+
+    private final Miner miner;
 
     @Override
     public void accept(Mono<MessageTemplate> message) {
@@ -97,8 +100,6 @@ public class BrokerMessageProcessor implements Consumer<Mono<MessageTemplate>> {
             case APPEND:
                 Block finalBlock = (Block) messageTemplate.getMessage();
 
-                log.info("Status: {}", finalBlock.isValidBlock(this.storages.getStorage(StorageTypes.MEMPOOL), this.manager.getTarget()));
-
                 if (finalBlock.isValidBlock(this.storages.getStorage(StorageTypes.MEMPOOL), this.manager.getTarget())
                         && !(this.storages.getStorage(StorageTypes.BLOCKCHAIN)
                         .has(ColumnFamilyTypes.BLOCKS, finalBlock.getKey()))) {
@@ -116,7 +117,38 @@ public class BrokerMessageProcessor implements Consumer<Mono<MessageTemplate>> {
                             .modify(ColumnFamilyTypes.STATE, Constants.DEFAULT_STATE_NAME
                                     .getBytes(StandardCharsets.UTF_8), state);
 
+                    NodeState nodeState = this.manager.getNodeState();
+                    nodeState.setLastBlockIndex(nodeState.getLastBlockIndex() + 1);
+
+                    this.storages.getStorage(StorageTypes.STATE)
+                            .modify(ColumnFamilyTypes.NODE, Constants.DEFAULT_NODE_STATE
+                                    .getBytes(StandardCharsets.UTF_8), nodeState);
+
+                    //Delete memepool transactions
+                    int index = 0;
+                    for(String transactionHash : finalBlock.getTransactions()) {
+                        if(this.storages.getStorage(StorageTypes.MEMPOOL).has(ColumnFamilyTypes.TRANSACTIONS, transactionHash
+                                .getBytes(StandardCharsets.UTF_8))) {
+                            Transaction transaction = ((MempoolTransaction) this.storages.getStorage(StorageTypes.MEMPOOL)
+                                    .get(ColumnFamilyTypes.TRANSACTIONS, transactionHash.getBytes(StandardCharsets.UTF_8)))
+                                    .toTransaction(finalBlock, index);
+
+                            //Call funding service
+
+                            this.storages.getStorage(StorageTypes.BLOCKCHAIN)
+                                    .putIfAbsent(true, ColumnFamilyTypes.TRANSACTIONS, transaction.getKey(), transaction);
+
+                            this.storages.getStorage(StorageTypes.MEMPOOL)
+                                    .delete(ColumnFamilyTypes.TRANSACTIONS, transaction.getKey());
+
+                            index++;
+                        } else {
+                            // ask for help from broker
+                        }
+                    }
+
                     this.manager.getPauseMining().set(false);
+                    this.miner.isWorking.set(false);
 
                     log.info("New block: {} appended to the chain", finalBlock.getHash());
                     log.info("Chain status updated: {}", state);
@@ -143,13 +175,10 @@ public class BrokerMessageProcessor implements Consumer<Mono<MessageTemplate>> {
     }
 
     private void processPeerEvent(MessageTemplate messageTemplate) {
-        log.info("V:{}", messageTemplate);
         switch (messageTemplate.getEventAction()) {
             case RESPONSE:
                 Response response = (Response) messageTemplate.getMessage();
                 final PeersContainer peersContainer = (PeersContainer) response.getPayload();
-
-                log.info("Peer container: {}", peersContainer);
 
                 Flux.fromIterable(peersContainer.getPeersList())
                         .doOnNext(peer -> {
@@ -194,7 +223,7 @@ public class BrokerMessageProcessor implements Consumer<Mono<MessageTemplate>> {
                         .getMessage();
 
                 storages.getStorage(StorageTypes.MEMPOOL)
-                        .putIfAbsent(true, mempoolTrans.getKey(), mempoolTrans);
+                        .putIfAbsent(true, ColumnFamilyTypes.TRANSACTIONS, mempoolTrans.getKey(), mempoolTrans);
                 log.info("New mempool transaction ready to be mined: {}", mempoolTrans);
 
                 //Process virtual balances

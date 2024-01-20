@@ -40,7 +40,7 @@ public class Miner {
     private BigInteger nonce = BigInteger.ZERO;
     private Instant startTime = Instant.now();
     private ECKey privateKey;
-    private final AtomicBoolean isWorking = new AtomicBoolean(false);
+    public final AtomicBoolean isWorking = new AtomicBoolean(false);
 
     public Miner createThreadMiner() throws InterruptedException {
         this.privateKey = new ECKey(this.nodeConfigs.getMinerPrivateKey());
@@ -97,7 +97,7 @@ public class Miner {
                 .asBasicModel();
 
         List<MempoolTransaction> transactions = (List<MempoolTransaction>) fetched;
-        log.info("Transactions: {}", transactions);
+        log.info("Transactions: {} - time:{}", transactions, this.startTime);
 
         return transactions;
     }
@@ -108,7 +108,7 @@ public class Miner {
         Block prevBlock = getPreviousBlock();
 
         isWorking.set(true);
-        lockTransactions(mempoolTransactions);
+        //lockTransactions(mempoolTransactions);
         newBlock = generateBlock(prevBlock.getHash(), prevBlock.getHeader().getIndex(), mempoolTransactions);
 
         if (newBlock != null && (BlockchainUtils.computedTargetValue(newBlock.getHash(), difficulty))) {
@@ -246,16 +246,16 @@ public class Miner {
         }
     }
 
-    private void lockTransactions(List<MempoolTransaction> mempoolTransactions) {
-        try {
-            for (MempoolTransaction mempoolTransaction : mempoolTransactions) {
-                mempoolTransaction.setStatus(TransactionStatus.LOCKED);
-
-                storages.getStorage(StorageTypes.MEMPOOL)
-                        .modify(ColumnFamilyTypes.TRANSACTIONS, mempoolTransaction.getKey(), mempoolTransaction);
-            }
-        } catch (Exception e) {
-            log.error("Error while locking transactions:{}", e.toString());
-        }
-    }
+//    private void lockTransactions(List<MempoolTransaction> mempoolTransactions) {
+//        try {
+//            for (MempoolTransaction mempoolTransaction : mempoolTransactions) {
+//                mempoolTransaction.setStatus(TransactionStatus.LOCKED);
+//
+//                storages.getStorage(StorageTypes.MEMPOOL)
+//                        .modify(ColumnFamilyTypes.TRANSACTIONS, mempoolTransaction.getKey(), mempoolTransaction);
+//            }
+//        } catch (Exception e) {
+//            log.error("Error while locking transactions:{}", e.toString());
+//        }
+//    }
 }
